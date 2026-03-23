@@ -11,7 +11,10 @@ pub struct AppPaths {
     pub images_dir: PathBuf,
 }
 
-fn with_conn<R>(paths: &AppPaths, f: impl FnOnce(&rusqlite::Connection) -> Result<R, String>) -> Result<R, String> {
+fn with_conn<R>(
+    paths: &AppPaths,
+    f: impl FnOnce(&rusqlite::Connection) -> Result<R, String>,
+) -> Result<R, String> {
     let conn = db::open(&paths.db_path)?;
     f(&conn)
 }
@@ -130,12 +133,20 @@ pub fn create_asset(input: AssetInput, paths: State<AppPaths>) -> Result<Asset, 
     exec_create_asset(&paths, input)
 }
 
-pub(crate) fn exec_update_asset(paths: &AppPaths, id: String, input: AssetInput) -> Result<Asset, String> {
+pub(crate) fn exec_update_asset(
+    paths: &AppPaths,
+    id: String,
+    input: AssetInput,
+) -> Result<Asset, String> {
     with_conn(paths, |c| db::update_asset(c, &id, input))
 }
 
 #[tauri::command]
-pub fn update_asset(id: String, input: AssetInput, paths: State<AppPaths>) -> Result<Asset, String> {
+pub fn update_asset(
+    id: String,
+    input: AssetInput,
+    paths: State<AppPaths>,
+) -> Result<Asset, String> {
     exec_update_asset(&paths, id, input)
 }
 
@@ -148,12 +159,18 @@ pub fn delete_asset(id: String, paths: State<AppPaths>) -> Result<(), String> {
     exec_delete_asset(&paths, id)
 }
 
-pub(crate) fn exec_list_asset_images(paths: &AppPaths, asset_id: String) -> Result<Vec<AssetImage>, String> {
+pub(crate) fn exec_list_asset_images(
+    paths: &AppPaths,
+    asset_id: String,
+) -> Result<Vec<AssetImage>, String> {
     with_conn(paths, |c| db::list_images(c, &asset_id))
 }
 
 #[tauri::command]
-pub fn list_asset_images(asset_id: String, paths: State<AppPaths>) -> Result<Vec<AssetImage>, String> {
+pub fn list_asset_images(
+    asset_id: String,
+    paths: State<AppPaths>,
+) -> Result<Vec<AssetImage>, String> {
     exec_list_asset_images(&paths, asset_id)
 }
 
@@ -167,7 +184,16 @@ pub(crate) fn exec_add_asset_image(
     let bytes = STANDARD
         .decode(data_base64.trim())
         .map_err(|e| format!("Invalid base64: {e}"))?;
-    with_conn(paths, |c| db::add_image(c, &paths.images_dir, &asset_id, &original_name, &bytes, caption))
+    with_conn(paths, |c| {
+        db::add_image(
+            c,
+            &paths.images_dir,
+            &asset_id,
+            &original_name,
+            &bytes,
+            caption,
+        )
+    })
 }
 
 #[tauri::command]
@@ -202,7 +228,10 @@ pub fn get_app_settings(paths: State<AppPaths>) -> Result<AppSettings, String> {
     exec_get_app_settings(&paths)
 }
 
-pub(crate) fn exec_save_app_settings(paths: &AppPaths, settings: AppSettings) -> Result<(), String> {
+pub(crate) fn exec_save_app_settings(
+    paths: &AppPaths,
+    settings: AppSettings,
+) -> Result<(), String> {
     with_conn(paths, |c| {
         db::set_setting(c, "gunspec_api_key", settings.gunspec_api_key.trim())?;
         gunspec::clear_cache();
@@ -215,7 +244,10 @@ pub fn save_app_settings(settings: AppSettings, paths: State<AppPaths>) -> Resul
     exec_save_app_settings(&paths, settings)
 }
 
-pub(crate) fn exec_suggest_manufacturers(paths: &AppPaths, query: String) -> Result<FieldSuggestions, String> {
+pub(crate) fn exec_suggest_manufacturers(
+    paths: &AppPaths,
+    query: String,
+) -> Result<FieldSuggestions, String> {
     with_conn(paths, |c| {
         let key = db::get_setting(c, "gunspec_api_key")?
             .map(|s| s.trim().to_string())
@@ -235,7 +267,10 @@ pub(crate) fn exec_suggest_manufacturers(paths: &AppPaths, query: String) -> Res
 }
 
 #[tauri::command]
-pub fn suggest_manufacturers(query: String, paths: State<AppPaths>) -> Result<FieldSuggestions, String> {
+pub fn suggest_manufacturers(
+    query: String,
+    paths: State<AppPaths>,
+) -> Result<FieldSuggestions, String> {
     exec_suggest_manufacturers(&paths, query)
 }
 
@@ -273,7 +308,10 @@ pub fn suggest_models(
     exec_suggest_models(&paths, manufacturer, query)
 }
 
-pub(crate) fn exec_suggest_tags(paths: &AppPaths, query: String) -> Result<FieldSuggestions, String> {
+pub(crate) fn exec_suggest_tags(
+    paths: &AppPaths,
+    query: String,
+) -> Result<FieldSuggestions, String> {
     with_conn(paths, |c| {
         let items = db::suggest_tag_names(c, &query, 40)?;
         Ok(FieldSuggestions {
@@ -381,7 +419,10 @@ mod tests {
         assert_eq!(mime_from_path(Path::new("w.webp")), "image/webp");
         assert_eq!(mime_from_path(Path::new("a.gif")), "image/gif");
         assert_eq!(mime_from_path(Path::new("h.heic")), "image/heic");
-        assert_eq!(mime_from_path(Path::new("unknown.bin")), "application/octet-stream");
+        assert_eq!(
+            mime_from_path(Path::new("unknown.bin")),
+            "application/octet-stream"
+        );
     }
 
     #[test]
@@ -423,9 +464,14 @@ mod tests {
         assert_eq!(imgs.len(), 1);
         let payload = exec_get_image_data(&paths, img.file_path.clone()).unwrap();
         assert_eq!(payload.mime, "image/png");
-        assert_eq!(STANDARD.decode(payload.data_base64).unwrap(), vec![1u8, 2, 3]);
+        assert_eq!(
+            STANDARD.decode(payload.data_base64).unwrap(),
+            vec![1u8, 2, 3]
+        );
         exec_delete_asset_image(&paths, img.id).unwrap();
-        assert!(exec_list_asset_images(&paths, a.id.clone()).unwrap().is_empty());
+        assert!(exec_list_asset_images(&paths, a.id.clone())
+            .unwrap()
+            .is_empty());
         exec_delete_asset(&paths, a.id).unwrap();
         assert!(exec_list_assets(&paths, None, None).unwrap().is_empty());
     }
@@ -456,18 +502,13 @@ mod tests {
     #[test]
     fn exec_suggest_manufacturers_learned_without_api_key() {
         let (_dir, paths) = open_paths();
-        exec_create_asset(
-            &paths,
-            sample_asset("L", "LearnedBrandCmd", "M"),
-        )
-        .unwrap();
+        exec_create_asset(&paths, sample_asset("L", "LearnedBrandCmd", "M")).unwrap();
         let f = exec_suggest_manufacturers(&paths, "learned".into()).unwrap();
         assert!(f.gunspec_notice.is_none());
-        assert!(
-            f.items
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("LearnedBrandCmd"))
-        );
+        assert!(f
+            .items
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case("LearnedBrandCmd")));
     }
 
     #[test]
@@ -481,11 +522,7 @@ mod tests {
             },
         )
         .unwrap();
-        exec_create_asset(
-            &paths,
-            sample_asset("R", "LocalOnlyCmd", "M"),
-        )
-        .unwrap();
+        exec_create_asset(&paths, sample_asset("R", "LocalOnlyCmd", "M")).unwrap();
         let mut server = mockito::Server::new();
         let body = r#"{"success":true,"data":[{"id":"z","name":"RemoteCo"}],"pagination":{"page":1,"limit":100,"total":1,"totalPages":1}}"#;
         let _m = server

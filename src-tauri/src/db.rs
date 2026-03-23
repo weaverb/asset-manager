@@ -95,11 +95,8 @@ pub fn init(db_path: &Path, images_dir: &Path) -> Result<(), String> {
         .query_row("SELECT COUNT(*) FROM assets", [], |r| r.get(0))
         .unwrap_or(0);
     if n_assets > 0 {
-        conn.execute(
-            "INSERT INTO assets_fts(assets_fts) VALUES('rebuild')",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
+        conn.execute("INSERT INTO assets_fts(assets_fts) VALUES('rebuild')", [])
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -195,7 +192,10 @@ fn tag_filter_sql(names: &[String]) -> (bool, String) {
     }
 }
 
-fn list_assets_sql_values(kind: Option<&str>, tag_names: &[String]) -> (String, Vec<rusqlite::types::Value>) {
+fn list_assets_sql_values(
+    kind: Option<&str>,
+    tag_names: &[String],
+) -> (String, Vec<rusqlite::types::Value>) {
     let tags_clean: Vec<String> = tag_names
         .iter()
         .map(|s| s.trim().to_string())
@@ -294,7 +294,11 @@ fn ensure_tag_id(conn: &Connection, name: &str) -> Result<String, String> {
     Ok(id)
 }
 
-pub fn replace_asset_tags(conn: &Connection, asset_id: &str, tags: &[String]) -> Result<(), String> {
+pub fn replace_asset_tags(
+    conn: &Connection,
+    asset_id: &str,
+    tags: &[String],
+) -> Result<(), String> {
     conn.execute(
         "DELETE FROM asset_tags WHERE asset_id = ?1",
         params![asset_id],
@@ -445,8 +449,7 @@ pub fn create_asset(conn: &Connection, input: AssetInput) -> Result<Asset, Strin
 
 pub fn update_asset(conn: &Connection, id: &str, input: AssetInput) -> Result<Asset, String> {
     validate_kind(&input.kind)?;
-    get_asset(conn, id)?
-        .ok_or_else(|| format!("Asset not found: {id}"))?;
+    get_asset(conn, id)?.ok_or_else(|| format!("Asset not found: {id}"))?;
     let now = chrono::Utc::now().to_rfc3339();
     let quantity = input.quantity.unwrap_or(1).max(0);
     let extra = input.extra_json.unwrap_or_else(|| "{}".to_string());
@@ -637,7 +640,11 @@ fn rows_to_strings(
 }
 
 /// Distinct non-empty manufacturer strings from the user's assets (prefix optional).
-pub fn distinct_manufacturers(conn: &Connection, prefix: &str, limit: i64) -> Result<Vec<String>, String> {
+pub fn distinct_manufacturers(
+    conn: &Connection,
+    prefix: &str,
+    limit: i64,
+) -> Result<Vec<String>, String> {
     let prefix = prefix.trim();
     if prefix.is_empty() {
         let mut stmt = conn
@@ -754,13 +761,15 @@ pub fn distinct_models(
 }
 
 /// Tag names for autocomplete (prefix optional), case-insensitive contains when prefix non-empty.
-pub fn suggest_tag_names(conn: &Connection, prefix: &str, limit: i64) -> Result<Vec<String>, String> {
+pub fn suggest_tag_names(
+    conn: &Connection,
+    prefix: &str,
+    limit: i64,
+) -> Result<Vec<String>, String> {
     let prefix = prefix.trim();
     if prefix.is_empty() {
         let mut stmt = conn
-            .prepare(
-                "SELECT name FROM tags ORDER BY name COLLATE NOCASE ASC LIMIT ?1",
-            )
+            .prepare("SELECT name FROM tags ORDER BY name COLLATE NOCASE ASC LIMIT ?1")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map(params![limit], |r| r.get(0))

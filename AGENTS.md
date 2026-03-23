@@ -1,0 +1,103 @@
+# AGENTS.md
+
+Context for AI coding agents working on **Asset Manager**: a **Tauri 2** desktop app with **React 19**, **TypeScript** (strict), **Vite 7**, and **SQLite** (bundled via `rusqlite`) in `src-tauri`. Human-oriented docs live in `README.md`.
+
+## Prerequisites
+
+- **Node.js 24** — repo pins `.node-version` and `package.json` `engines`; use `fnm use` (or equivalent) before installing deps.
+- **Rust** — `rustup`-managed toolchain for `src-tauri`.
+- **OS / Tauri** — follow [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) (WebView, etc.) for the host platform.
+
+## Setup
+
+```bash
+fnm use          # or ensure Node 24
+npm install
+```
+
+## Commands (from repo root)
+
+| Command | Use |
+|--------|-----|
+| `npm run tauri dev` | **Primary:** full app with hot reload; Rust IPC available only here (not in a plain browser). |
+| `npm run dev` | Vite only at `http://localhost:1420` — UI-only; Tauri `invoke` APIs unavailable. |
+| `npm run build` | Production frontend: `tsc` + Vite → `dist/`. |
+| `npm run tauri build` | Release bundle for current platform (runs `beforeBuildCommand` → `npm run build`). |
+| `npm run test:rust` | Rust unit tests (`src-tauri`). |
+| `npm run test:rust:coverage` | LLVM line coverage HTML under `target/coverage-rust/html/`; **fails under 80%** lines (per script). |
+| `npm run fmt:rust` | Apply `rustfmt` to `src-tauri`. |
+| `npm run fmt:rust:check` | Fail if Rust code is not formatted (CI / pre-merge). |
+| `npm run lint:rust` | `clippy` on all targets with `-D warnings`. |
+
+**Rust quality (recommended before merging backend-heavy changes):** run `npm run fmt:rust:check` and `npm run lint:rust` (or `npm run fmt:rust` to auto-fix formatting).
+
+There is no ESLint config today; frontend quality is enforced by **TypeScript strict** (`tsconfig.json`) and **`tsc`** as part of `npm run build`.
+
+## Project layout (quick)
+
+- `src/` — React UI, routing, Tauri API usage (`src/tauri.ts`).
+- `src-tauri/` — Rust crate (`lib.rs`, commands, DB, GunSpec client).
+- `src-tauri/tauri.conf.json` — app metadata, bundle, `beforeDevCommand` / `beforeBuildCommand`.
+
+## Conventional Commits
+
+Use **[Conventional Commits](https://www.conventionalcommits.org/)** for all commits so history and automated tooling stay parseable.
+
+**Format:** `<type>(<optional-scope>): <description>`
+
+**Common types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
+
+**Suggested scopes for this repo** (pick what fits; omit scope if unclear):
+
+| Scope | When |
+|--------|------|
+| `frontend` | React/TS/Vite under `src/` |
+| `tauri` | Tauri config, plugins, window/bundle settings |
+| `backend` / `rust` | Rust crate under `src-tauri/src/` |
+| `db` | SQLite schema, migrations, persistence |
+| `deps` | Only dependency bumps (npm or Cargo) |
+
+**Examples:**
+
+- `feat(frontend): add filter chips to asset table`
+- `fix(backend): handle empty manufacturer response from cache`
+- `chore(deps): bump vite to 7.x`
+
+**Breaking changes:** add `!` after the type/scope or a `BREAKING CHANGE:` footer in the commit body so Semver major bumps are obvious (e.g. `feat(backend)!: remove legacy IPC command`).
+
+## Semver and releases
+
+This project follows **[Semantic Versioning 2.0.0](https://semver.org/)** (`MAJOR.MINOR.PATCH`).
+
+**Version must stay in sync** in three places before tagging or shipping a release build:
+
+1. `package.json` → `"version"`
+2. `src-tauri/Cargo.toml` → `[package] version`
+3. `src-tauri/tauri.conf.json` → `"version"`
+
+Tauri’s release flow reads these consistently; drifting versions cause confusing bundles or updater metadata.
+
+**Mapping (typical):**
+
+| Change | Bump |
+|--------|------|
+| Bug fixes, small behavior fixes compatible with existing data/API | **PATCH** |
+| New user-visible features, backward-compatible | **MINOR** |
+| Breaking app behavior, incompatible on-disk format, or removed/changed public IPC contract | **MAJOR** |
+
+**Release checklist (manual until CI exists):**
+
+1. Update the three version fields above to the same value.
+2. Run `npm run build`, `npm run test:rust`, and (if Rust changed) `npm run test:rust:coverage`, `npm run fmt:rust:check`, and `npm run lint:rust`.
+3. Run `npm run tauri build` on each target platform you ship.
+4. Tag Git: `vX.Y.Z` (leading `v` is a common convention; stay consistent with any future automation).
+
+**Future automation (optional):** tools such as [release-please](https://github.com/googleapis/release-please) or [semantic-release](https://semantic-release.gitbook.io/) pair well with Conventional Commits to propose version bumps and changelogs; for Tauri you still need a step that updates **all three** version locations (or a small script) before building artifacts.
+
+## Agent-specific notes
+
+- **IPC / `invoke`:** Full-stack testing needs `npm run tauri dev` (or a built app). Browser-only `npm run dev` will show “Run the desktop app” / undefined `invoke` — that is expected.
+- **Secrets:** GunSpec API keys are stored via in-app Settings in SQLite, not repo files (see `README.md`).
+- **Coverage:** `test:rust:coverage` ignores `lib.rs` and `main.rs` in the threshold regex; extend tests rather than lowering the bar without team agreement.
+
+When instructions here conflict with an explicit user message in chat, **follow the user**.

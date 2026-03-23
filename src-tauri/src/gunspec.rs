@@ -72,12 +72,14 @@ const MAX_SUGGEST: usize = 25;
 const SEARCH_CACHE_TTL: Duration = Duration::from_secs(900);
 const SEARCH_CACHE_MAX: usize = 48;
 
-static HTTP: OnceLock<Client> = OnceLock::new();
-static MFG_CACHE: Mutex<Option<(Instant, Vec<(String, String)>)>> = Mutex::new(None);
-static SEARCH_CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<FirearmListDto>)>>> =
-    OnceLock::new();
+type MfgCacheState = Option<(Instant, Vec<(String, String)>)>;
+type SearchCacheMap = HashMap<String, (Instant, Vec<FirearmListDto>)>;
 
-fn search_cache() -> &'static Mutex<HashMap<String, (Instant, Vec<FirearmListDto>)>> {
+static HTTP: OnceLock<Client> = OnceLock::new();
+static MFG_CACHE: Mutex<MfgCacheState> = Mutex::new(None);
+static SEARCH_CACHE: OnceLock<Mutex<SearchCacheMap>> = OnceLock::new();
+
+fn search_cache() -> &'static Mutex<SearchCacheMap> {
     SEARCH_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -190,7 +192,10 @@ fn headers(api_key: Option<&str>) -> Result<HeaderMap, String> {
     Ok(h)
 }
 
-fn fetch_manufacturer_page(api_key: Option<&str>, page: u32) -> Result<ManufacturersEnvelope, String> {
+fn fetch_manufacturer_page(
+    api_key: Option<&str>,
+    page: u32,
+) -> Result<ManufacturersEnvelope, String> {
     let url = format!("{}/v1/manufacturers?per_page=100&page={page}", api_base());
     let res = client()
         .get(&url)
@@ -206,8 +211,8 @@ fn fetch_manufacturer_page(api_key: Option<&str>, page: u32) -> Result<Manufactu
         let snippet: String = text.chars().take(160).collect();
         return Err(format!("GunSpec manufacturers HTTP {status}: {snippet}"));
     }
-    let env: ManufacturersEnvelope = serde_json::from_str(&text)
-        .map_err(|e| format!("GunSpec manufacturers JSON: {e}"))?;
+    let env: ManufacturersEnvelope =
+        serde_json::from_str(&text).map_err(|e| format!("GunSpec manufacturers JSON: {e}"))?;
     if !env.success {
         if let Some(m) = gunspec_api_error_message(&text, false) {
             return Err(m);
@@ -280,7 +285,7 @@ pub fn suggest_manufacturers(query: &str, api_key: Option<&str>) -> (Vec<String>
         .filter(|name| name.to_lowercase().contains(&lower))
         .take(MAX_SUGGEST)
         .collect();
-    out.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    out.sort_by_key(|a| a.to_lowercase());
     out.truncate(MAX_SUGGEST);
     (out, None)
 }
@@ -401,7 +406,7 @@ pub fn suggest_models(
             break;
         }
     }
-    names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    names.sort_by_key(|a| a.to_lowercase());
     (names, None)
 }
 
