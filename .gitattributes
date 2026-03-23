@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+*.rs   text eol=lf
+*.toml text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+
+# Lockfiles: avoid silent LF/CRLF churn on Windows
+Cargo.lock       text eol=lf
+package-lock.json text eol=lf

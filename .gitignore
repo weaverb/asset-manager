@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Frontend build
+dist/
+dist-ssr/
+*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Vite
+.vite/
+
+# Rust — workspace crate (Tauri)
+src-tauri/target/
+
+# Cargo / llvm-cov output at repo root (see npm run test:rust:coverage)
+target/
+
+# Profiling & coverage
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# Environment & local secrets (never commit)
+.env
+.env.*
+!.env.example
+api.key
+*.pem
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
