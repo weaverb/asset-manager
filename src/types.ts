@@ -13,6 +13,10 @@ export interface Asset {
   purchasePrice: number | null;
   notes: string | null;
   extraJson: string;
+  /** Total rounds logged from completed range days (firearms). */
+  lifetimeRoundsFired: number;
+  /** Rounds since last maintenance record (firearms). */
+  roundsFiredSinceMaintenance: number;
   createdAt: string;
   updatedAt: string;
   tags: string[];
@@ -59,4 +63,64 @@ export interface AppSettings {
 export interface FieldSuggestions {
   items: string[];
   gunspecNotice?: string | null;
+}
+
+export interface RangeDaySummary {
+  id: string;
+  scheduledDate: string;
+  status: string;
+  notes: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+}
+
+export interface RangeDayItemDetail {
+  assetId: string;
+  name: string;
+  kind: string;
+  roundsFired: number | null;
+}
+
+export interface RangeDayAmmoLink {
+  firearmAssetId: string;
+  firearmName: string;
+  ammunitionAssetId: string;
+  ammunitionName: string;
+  ammunitionCaliber: string | null;
+  quantityOnHand: number;
+  roundsConsumed: number | null;
+}
+
+export interface RangeDayDetail {
+  id: string;
+  scheduledDate: string;
+  status: string;
+  notes: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: RangeDayItemDetail[];
+  /** Present when backend supports range-day ammunition (defaults to []). */
+  ammoLinks?: RangeDayAmmoLink[];
+}
+
+export interface RangeDayAmmoConsumptionEntry {
+  firearmAssetId: string;
+  ammunitionAssetId: string;
+  rounds: number;
+}
+
+export interface RangeDayRoundEntry {
+  assetId: string;
+  roundsFired: number;
+}
+
+export interface AssetMaintenance {
+  id: string;
+  assetId: string;
+  performedAt: string;
+  notes: string | null;
+  createdAt: string;
 }

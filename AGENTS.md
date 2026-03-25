@@ -39,6 +39,16 @@ There is no ESLint config today; frontend quality is enforced by **TypeScript st
 - `src-tauri/` — Rust crate (`lib.rs`, commands, DB, GunSpec client).
 - `src-tauri/tauri.conf.json` — app metadata, bundle, `beforeDevCommand` / `beforeBuildCommand`.
 
+End-user workflows (range days, ammunition checkout, toasts, form behavior) are summarized for humans in **`README.md` → “Using the application”.** When changing those flows, keep README and this section aligned.
+
+## Product behavior (agents)
+
+- **Toasts:** App-wide feedback uses `ToastProvider` (`src/context/ToastContext.tsx`) wrapping `AssetsListProvider` in `AppShell`, so `useToast()` works under the whole shell (including list refresh). Toasts render via `createPortal` to `document.body` with high z-index — prefer `pushToast(message, "error" | "success" | "info")` instead of page-top `banner` blocks for IPC errors, saves, and validation hints.
+- **Asset list errors:** `AssetsListContext` no longer exposes `listError`; failed `refreshList` pushes an error toast.
+- **Numeric form fields:** Use shared **`DigitsOnlyInput`** and **`parseNonNegInt`** (`src/lib/parseNumeric.ts`) for integers; **`DecimalTextInput`** + **`parseOptionalPrice`** / **`sanitizeDecimalInput`** for money-style decimals. Avoid `type="number"` on asset and range-day quantity-style fields (native controls fight controlled React state while typing).
+- **Range days + ammunition (backend):** SQLite table `range_day_firearm_ammo` links planned days to firearm + ammunition assets. IPC includes `set_range_day_firearm_ammunition`, and `complete_range_day` accepts **`ammo_consumption`** (pairs must match assigned links; sums per gun match rounds fired when ammo is assigned; stock checks; decrements ammo `quantity`). See `src-tauri/src/db.rs` for validation rules (single caliber per gun per day, unique ammo asset per day across guns, etc.).
+- **Range days (frontend):** `RangeDayDetailPage` — planned section labels **Apply Firearm(s)** from selection count; **Save and close** calls the same planned update then navigates to `/range-days`. GunSpec field notices under autocomplete stay inline (not toasts).
+
 ## Conventional Commits
 
 Use **[Conventional Commits](https://www.conventionalcommits.org/)** for all commits so history and automated tooling stay parseable.

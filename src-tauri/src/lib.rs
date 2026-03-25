@@ -47,6 +47,16 @@ pub fn run() {
             commands::suggest_models,
             commands::suggest_tags,
             commands::dev_drop_and_reseed,
+            commands::list_range_days,
+            commands::get_range_day,
+            commands::create_range_day,
+            commands::update_range_day_planned,
+            commands::complete_range_day,
+            commands::set_range_day_firearm_ammunition,
+            commands::cancel_range_day,
+            commands::delete_range_day,
+            commands::add_asset_maintenance,
+            commands::list_asset_maintenance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

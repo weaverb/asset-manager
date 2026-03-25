@@ -92,6 +92,25 @@ The SQLite database and image files live under the OS app data directory (e.g. `
 
 App preferences (including an optional external API key) are stored in the same SQLite database in an `app_settings` table.
 
+### Using the application
+
+**Assets**
+
+- Open **All assets** to browse, search, filter by type and tags, and create or edit rows in the side drawer.
+- **Firearms** show lifetime rounds and rounds since last maintenance (updated when you complete a range day or add a maintenance record). The **Maintenance** block at the bottom of the drawer matches the main form layout: optional performed date/time, notes, and **Add maintenance** (which resets “rounds since maintenance” for that gun).
+- **Quantity** and **purchase price** use plain text numeric fields (not the browser’s native number spinners) so values are easy to type and edit.
+
+**Range days**
+
+- From **Range days** (or the dashboard), create a day with a date and the firearms you plan to bring.
+- On a planned day, **Edit plan** lets you change the date and the firearm checklist. Use **Apply Firearm** or **Apply Firearms** (label reflects how many are selected) to persist date and guns. **Save and close** does the same update and returns to the range day list. **Cancel range day** or **Delete range day** are destructive actions at the bottom of the form.
+- **Ammunition checkout:** assign inventory ammunition to each gun on that day. Only **one caliber** is allowed per firearm; you may assign **several ammunition assets** of that caliber (e.g. different brands). The **same ammunition asset cannot** be assigned to **two different firearms** on the **same** day.
+- **Complete range day:** enter rounds fired per firearm. If ammunition was assigned, split those totals across the assigned boxes under **Rounds from inventory**; the sum per gun must match rounds fired. **Use stock** next to a field fills it with the linked ammunition’s current on-hand quantity (or, for the main rounds field, the sum across assigned ammo for that gun). Completing the day increments each firearm’s round counters, records optional notes, stores how many rounds came from each assigned box, and **reduces ammunition quantities** in inventory (the backend checks that you are not consuming more than on hand).
+
+**Notifications**
+
+- Errors, success messages (e.g. saved settings, updated range day), and short informational prompts appear as **toasts** in the **lower-right** of the window so they stay visible even when the page is scrolled. Dismiss a toast with **×**; they also time out automatically.
+
 ### Settings and manufacturer/model autocomplete
 
 Open **Settings** from the header to paste a [GunSpec.io](https://gunspec.io) API key. The app does **not** read keys from files such as `api.key` in the repo; you must save the key through Settings so it is stored in SQLite. The key is used only by the Rust backend when calling GunSpec (it is not sent anywhere else).

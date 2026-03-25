@@ -7,9 +7,9 @@
     "node": ">=24.0.0 <25"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "dev": "node scripts/check-node.mjs && vite",
+    "build": "node scripts/check-node.mjs && tsc && vite build",
+    "preview": "node scripts/check-node.mjs && vite preview",
     "tauri": "tauri",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:rust:coverage": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml test --lib --html --output-dir target/coverage-rust --fail-under-lines 80 --ignore-filename-regex 'lib[.]rs$|main[.]rs$'",

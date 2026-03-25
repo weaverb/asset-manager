@@ -1,4 +1,7 @@
-use crate::db::{self, Asset, AssetImage, AssetInput};
+use crate::db::{
+    self, Asset, AssetImage, AssetInput, AssetMaintenance, RangeDayAmmoConsumptionEntry,
+    RangeDayDetail, RangeDayRoundEntry, RangeDaySummary,
+};
 use crate::gunspec;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -353,6 +356,90 @@ pub(crate) fn exec_get_image_data(paths: &AppPaths, path: String) -> Result<Imag
 #[tauri::command]
 pub fn get_image_data(path: String, paths: State<AppPaths>) -> Result<ImagePayload, String> {
     exec_get_image_data(&paths, path)
+}
+
+#[tauri::command]
+pub fn list_range_days(paths: State<AppPaths>) -> Result<Vec<RangeDaySummary>, String> {
+    with_conn(&paths, db::list_range_days)
+}
+
+#[tauri::command]
+pub fn get_range_day(id: String, paths: State<AppPaths>) -> Result<RangeDayDetail, String> {
+    with_conn(&paths, |c| {
+        db::get_range_day(c, &id)?.ok_or_else(|| "Range day not found.".into())
+    })
+}
+
+#[tauri::command]
+pub fn create_range_day(
+    scheduled_date: String,
+    asset_ids: Vec<String>,
+    paths: State<AppPaths>,
+) -> Result<RangeDayDetail, String> {
+    with_conn(&paths, |c| db::create_range_day(c, scheduled_date, asset_ids))
+}
+
+#[tauri::command]
+pub fn update_range_day_planned(
+    id: String,
+    scheduled_date: String,
+    asset_ids: Vec<String>,
+    paths: State<AppPaths>,
+) -> Result<RangeDayDetail, String> {
+    with_conn(&paths, |c| db::update_range_day_planned(c, &id, scheduled_date, asset_ids))
+}
+
+#[tauri::command]
+pub fn complete_range_day(
+    id: String,
+    notes: Option<String>,
+    rounds: Vec<RangeDayRoundEntry>,
+    ammo_consumption: Vec<RangeDayAmmoConsumptionEntry>,
+    paths: State<AppPaths>,
+) -> Result<RangeDayDetail, String> {
+    with_conn(&paths, |c| {
+        db::complete_range_day(c, &id, notes, rounds, ammo_consumption)
+    })
+}
+
+#[tauri::command]
+pub fn set_range_day_firearm_ammunition(
+    id: String,
+    firearm_asset_id: String,
+    ammunition_asset_ids: Vec<String>,
+    paths: State<AppPaths>,
+) -> Result<RangeDayDetail, String> {
+    with_conn(&paths, |c| {
+        db::set_range_day_firearm_ammunition(c, &id, &firearm_asset_id, ammunition_asset_ids)
+    })
+}
+
+#[tauri::command]
+pub fn cancel_range_day(id: String, paths: State<AppPaths>) -> Result<(), String> {
+    with_conn(&paths, |c| db::cancel_range_day(c, &id))
+}
+
+#[tauri::command]
+pub fn delete_range_day(id: String, paths: State<AppPaths>) -> Result<(), String> {
+    with_conn(&paths, |c| db::delete_range_day(c, &id))
+}
+
+#[tauri::command]
+pub fn add_asset_maintenance(
+    asset_id: String,
+    performed_at: Option<String>,
+    notes: Option<String>,
+    paths: State<AppPaths>,
+) -> Result<AssetMaintenance, String> {
+    with_conn(&paths, |c| db::add_asset_maintenance(c, &asset_id, performed_at, notes))
+}
+
+#[tauri::command]
+pub fn list_asset_maintenance(
+    asset_id: String,
+    paths: State<AppPaths>,
+) -> Result<Vec<AssetMaintenance>, String> {
+    with_conn(&paths, |c| db::list_asset_maintenance(c, &asset_id))
 }
 
 #[cfg(test)]

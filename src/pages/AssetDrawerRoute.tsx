@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useRef,
   useState,
 } from "react";
 import { useMatch, useNavigate, useParams } from "react-router-dom";
@@ -10,6 +9,7 @@ import type {
   Asset,
   AssetImage,
   AssetInput,
+  AssetMaintenance,
   FieldSuggestions,
   ImagePayload,
 } from "../types";
@@ -22,6 +22,7 @@ import {
   normalizeTagsForSave,
 } from "../lib/assetDefaults";
 import { useAssetsList } from "../context/AssetsListContext";
+import { useToast } from "../context/ToastContext";
 
 export function AssetDrawerRoute() {
   const matchNew = useMatch({ path: "/assets/new", end: true });
@@ -29,50 +30,32 @@ export function AssetDrawerRoute() {
   const navigate = useNavigate();
   const { assetId } = useParams<{ assetId: string }>();
   const { refreshList } = useAssetsList();
+  const { pushToast } = useToast();
 
   const [editing, setEditing] = useState<AssetInput | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [images, setImages] = useState<AssetImage[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
-  const [drawerError, setDrawerError] = useState<string | null>(null);
+  const [drawerLoadFailed, setDrawerLoadFailed] = useState(false);
   const [manufacturerGunspecNotice, setManufacturerGunspecNotice] = useState<
     string | null
   >(null);
   const [modelGunspecNotice, setModelGunspecNotice] = useState<string | null>(
     null,
   );
-  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const saveNoticeTimerRef = useRef<number | null>(null);
+  const [loadedAsset, setLoadedAsset] = useState<Asset | null>(null);
+  const [maintenanceList, setMaintenanceList] = useState<AssetMaintenance[]>(
+    [],
+  );
+  const [maintPerformedAt, setMaintPerformedAt] = useState("");
+  const [maintNotes, setMaintNotes] = useState("");
+  const [maintSaving, setMaintSaving] = useState(false);
 
   const close = useCallback(() => {
     setDeleteConfirmOpen(false);
-    if (saveNoticeTimerRef.current) {
-      window.clearTimeout(saveNoticeTimerRef.current);
-      saveNoticeTimerRef.current = null;
-    }
-    setSaveNotice(null);
     navigate("/assets");
   }, [navigate]);
-
-  const showSaveNotice = useCallback((message: string) => {
-    if (saveNoticeTimerRef.current) {
-      window.clearTimeout(saveNoticeTimerRef.current);
-    }
-    setSaveNotice(message);
-    saveNoticeTimerRef.current = window.setTimeout(() => {
-      setSaveNotice(null);
-      saveNoticeTimerRef.current = null;
-    }, 5000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (saveNoticeTimerRef.current) {
-        window.clearTimeout(saveNoticeTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -89,26 +72,31 @@ export function AssetDrawerRoute() {
 
   useLayoutEffect(() => {
     if (!isNew) return;
-    setDrawerError(null);
+    setDrawerLoadFailed(false);
     setManufacturerGunspecNotice(null);
     setModelGunspecNotice(null);
     setSelectedId(null);
     setEditing(emptyInput());
     setImages([]);
     setImageUrls({});
+    setLoadedAsset(null);
+    setMaintenanceList([]);
+    setMaintPerformedAt("");
+    setMaintNotes("");
   }, [isNew]);
 
   useEffect(() => {
     if (isNew) return;
-    setDrawerError(null);
     setManufacturerGunspecNotice(null);
     setModelGunspecNotice(null);
-    setSaveNotice(null);
     if (!assetId) {
       setEditing(null);
       setSelectedId(null);
+      setLoadedAsset(null);
+      setDrawerLoadFailed(false);
       return;
     }
+    setDrawerLoadFailed(false);
     let cancelled = false;
     void (async () => {
       try {
@@ -117,21 +105,31 @@ export function AssetDrawerRoute() {
         });
         if (cancelled) return;
         if (!existing) {
-          setDrawerError("Asset not found.");
+          pushToast("Asset not found.", "error");
+          setDrawerLoadFailed(true);
           setEditing(null);
           setSelectedId(null);
+          setLoadedAsset(null);
           return;
         }
+        setDrawerLoadFailed(false);
         setSelectedId(existing.id);
         setEditing(assetToInput(existing));
+        setLoadedAsset(existing);
       } catch (e) {
-        if (!cancelled) setDrawerError(String(e));
+        if (!cancelled) {
+          pushToast(String(e), "error");
+          setDrawerLoadFailed(true);
+          setEditing(null);
+          setSelectedId(null);
+          setLoadedAsset(null);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [isNew, assetId]);
+  }, [isNew, assetId, pushToast]);
 
   const selected = editing;
 
@@ -170,6 +168,27 @@ export function AssetDrawerRoute() {
     };
   }, [selectedId, isNew]);
 
+  useEffect(() => {
+    if (!selectedId || isNew || selected?.kind !== "firearm") {
+      setMaintenanceList([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await invoke<AssetMaintenance[]>("list_asset_maintenance", {
+          assetId: selectedId,
+        });
+        if (!cancelled) setMaintenanceList(rows);
+      } catch {
+        if (!cancelled) setMaintenanceList([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, isNew, selected?.kind]);
+
   const fetchManufacturerSuggestions = useCallback((query: string) => {
     return invoke<FieldSuggestions | string[]>("suggest_manufacturers", {
       query,
@@ -195,14 +214,14 @@ export function AssetDrawerRoute() {
   const save = async (closeAfter: boolean) => {
     if (!selected) return;
     if (!selected.name.trim()) {
-      setDrawerError("Name is required.");
+      pushToast("Name is required.", "info");
       return;
     }
     const extra = (selected.extraJson ?? "{}").trim() || "{}";
     try {
       JSON.parse(extra);
     } catch {
-      setDrawerError("Extra fields must be valid JSON.");
+      pushToast("Extra fields must be valid JSON.", "info");
       return;
     }
     const payload: AssetInput = {
@@ -217,22 +236,21 @@ export function AssetDrawerRoute() {
       extraJson: extra,
       tags: normalizeTagsForSave(selected.tags),
     };
-    setDrawerError(null);
     try {
       if (isNew || !selectedId) {
         const created = await invoke<Asset>("create_asset", { input: payload });
         setSelectedId(created.id);
         setEditing(assetToInput(created));
+        setLoadedAsset(created);
         await refreshList();
         navigate(`/assets/${created.id}`, { replace: true });
         if (closeAfter) {
           close();
         } else {
-          window.setTimeout(() => {
-            showSaveNotice(
-              "Asset created and saved. You can add photos below.",
-            );
-          }, 0);
+          pushToast(
+            "Asset created and saved. You can add photos below.",
+            "success",
+          );
         }
       } else {
         const updated = await invoke<Asset>("update_asset", {
@@ -240,28 +258,28 @@ export function AssetDrawerRoute() {
           input: payload,
         });
         setEditing(assetToInput(updated));
+        setLoadedAsset(updated);
         await refreshList();
         if (closeAfter) {
           close();
         } else {
-          showSaveNotice("Details have been saved.");
+          pushToast("Details have been saved.", "success");
         }
       }
     } catch (e) {
-      setDrawerError(String(e));
+      pushToast(String(e), "error");
     }
   };
 
   const runDelete = async () => {
     if (!selectedId) return;
-    setDrawerError(null);
     try {
       await invoke("delete_asset", { id: String(selectedId) });
       setDeleteConfirmOpen(false);
       await refreshList();
       close();
     } catch (e) {
-      setDrawerError(String(e));
+      pushToast(String(e), "error");
       setDeleteConfirmOpen(false);
     }
   };
@@ -275,7 +293,6 @@ export function AssetDrawerRoute() {
       binary += String.fromCharCode(bytes[i]!);
     }
     const dataBase64 = btoa(binary);
-    setDrawerError(null);
     try {
       await invoke("add_asset_image", {
         assetId: selectedId,
@@ -301,12 +318,41 @@ export function AssetDrawerRoute() {
       }
       setImageUrls(next);
     } catch (e) {
-      setDrawerError(String(e));
+      pushToast(String(e), "error");
+    }
+  };
+
+  const submitMaintenance = async () => {
+    if (!selectedId || selected?.kind !== "firearm") return;
+    setMaintSaving(true);
+    try {
+      await invoke("add_asset_maintenance", {
+        assetId: selectedId,
+        performedAt: maintPerformedAt.trim() || null,
+        notes: maintNotes.trim() || null,
+      });
+      setMaintPerformedAt("");
+      setMaintNotes("");
+      const rows = await invoke<AssetMaintenance[]>("list_asset_maintenance", {
+        assetId: selectedId,
+      });
+      setMaintenanceList(rows);
+      const refreshed = await invoke<Asset | null>("get_asset", {
+        id: selectedId,
+      });
+      if (refreshed) setLoadedAsset(refreshed);
+      pushToast(
+        "Maintenance recorded. Rounds since maintenance reset.",
+        "success",
+      );
+    } catch (e) {
+      pushToast(String(e), "error");
+    } finally {
+      setMaintSaving(false);
     }
   };
 
   const deleteImage = async (imageId: string) => {
-    setDrawerError(null);
     try {
       await invoke("delete_asset_image", { imageId });
       setImages((prev) => prev.filter((i) => i.id !== imageId));
@@ -316,7 +362,7 @@ export function AssetDrawerRoute() {
         return n;
       });
     } catch (e) {
-      setDrawerError(String(e));
+      pushToast(String(e), "error");
     }
   };
 
@@ -341,15 +387,15 @@ export function AssetDrawerRoute() {
               ×
             </button>
           </div>
-          {drawerError ? (
-            <div className="drawer-body">
-              <p className="drawer-error">{drawerError}</p>
-            </div>
-          ) : (
-            <div className="drawer-body">
+          <div className="drawer-body">
+            {drawerLoadFailed ? (
+              <p className="drawer-error muted">
+                Couldn&rsquo;t load this asset. See the notification.
+              </p>
+            ) : (
               <p className="muted">Loading…</p>
-            </div>
-          )}
+            )}
+          </div>
         </aside>
       </div>
     );
@@ -378,14 +424,6 @@ export function AssetDrawerRoute() {
           </button>
         </div>
         <div className="drawer-body">
-          {drawerError ? (
-            <div className="banner error drawer-banner">{drawerError}</div>
-          ) : null}
-          {saveNotice ? (
-            <div className="form-save-notice" role="status">
-              {saveNotice}
-            </div>
-          ) : null}
           <AssetForm
             editing={selected}
             setEditing={(next) => {
@@ -411,7 +449,75 @@ export function AssetDrawerRoute() {
             setModelGunspecNotice={setModelGunspecNotice}
             fetchTagSuggestions={fetchTagSuggestions}
             omitFormTitle
+            firearmRoundStats={
+              !isNew &&
+              selected.kind === "firearm" &&
+              loadedAsset &&
+              loadedAsset.id === selectedId
+                ? {
+                    lifetime: loadedAsset.lifetimeRoundsFired,
+                    sinceMaintenance:
+                      loadedAsset.roundsFiredSinceMaintenance,
+                  }
+                : null
+            }
           />
+          {!isNew && selectedId && selected.kind === "firearm" ? (
+            <section className="maintenance-section">
+              <div className="maintenance-section-head">
+                <h3>Maintenance</h3>
+              </div>
+              <p className="muted maintenance-section-lead">
+                Adding a record resets &ldquo;rounds since maintenance&rdquo; for
+                this firearm.
+              </p>
+              {maintenanceList.length === 0 ? (
+                <p className="muted maintenance-empty">No maintenance entries yet.</p>
+              ) : (
+                <ul className="maintenance-log">
+                  {maintenanceList.map((m) => (
+                    <li key={m.id}>
+                      <time dateTime={m.performedAt}>
+                        {new Date(m.performedAt).toLocaleString()}
+                      </time>
+                      {m.notes ? (
+                        <p className="maint-notes">{m.notes}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="maintenance-add-form form-grid">
+                <label className="span-2">
+                  Performed (optional)
+                  <input
+                    type="datetime-local"
+                    value={maintPerformedAt}
+                    onChange={(e) => setMaintPerformedAt(e.target.value)}
+                  />
+                </label>
+                <label className="span-2">
+                  Notes
+                  <textarea
+                    rows={3}
+                    value={maintNotes}
+                    onChange={(e) => setMaintNotes(e.target.value)}
+                    placeholder="e.g. Cleaned, inspected spring…"
+                  />
+                </label>
+                <div className="span-2 maintenance-form-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={maintSaving}
+                    onClick={() => void submitMaintenance()}
+                  >
+                    {maintSaving ? "Saving…" : "Add maintenance"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
         </div>
       </aside>
       {deleteConfirmOpen ? (
