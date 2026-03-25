@@ -5,6 +5,13 @@ export function parseNonNegInt(s: string | undefined): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/** Digit-only maintenance interval: empty → null; zero → null. */
+export function parseOptionalPositiveInt(digits: string): number | null {
+  if (digits.trim() === "") return null;
+  const n = parseNonNegInt(digits);
+  return n > 0 ? n : null;
+}
+
 /** Keeps digits and at most one decimal point (for currency-style entry). */
 export function sanitizeDecimalInput(raw: string): string {
   let s = raw.replace(/[^\d.]/g, "");

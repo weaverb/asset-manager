@@ -7,6 +7,8 @@ import { KINDS } from "../lib/assetDefaults";
 import { invoke } from "../tauri";
 import { useAssetsList } from "../context/AssetsListContext";
 import { useToast } from "../context/ToastContext";
+import { AssetKindIcon } from "../components/AssetKindIcon";
+import { ASSET_TABLE_ROW_ICON_BOX_PX } from "../icons";
 
 function PencilIcon() {
   return (
@@ -154,7 +156,7 @@ export function AssetTable() {
           <thead>
             <tr className="asset-table-filters-row">
               <th
-                colSpan={9}
+                colSpan={10}
                 scope="colgroup"
                 className="asset-table-filters-cell"
               >
@@ -196,6 +198,9 @@ export function AssetTable() {
               </th>
             </tr>
             <tr className="asset-table-columns-row">
+              <th scope="col" className="asset-table-col-icon">
+                <span className="visually-hidden">Icon</span>
+              </th>
               {(
                 [
                   "kind",
@@ -229,6 +234,16 @@ export function AssetTable() {
           <tbody>
             {sorted.map((a) => (
               <tr key={a.id}>
+                <td className="asset-table-col-icon">
+                  <AssetKindIcon
+                    asset={{
+                      kind: a.kind,
+                      subtype: a.subtype ?? null,
+                    }}
+                    layoutBoxPx={ASSET_TABLE_ROW_ICON_BOX_PX}
+                    className="asset-row-silhouette"
+                  />
+                </td>
                 <td>{kindLabel(a.kind)}</td>
                 <td className="td-strong">{a.name}</td>
                 <td>{a.manufacturer ?? "—"}</td>

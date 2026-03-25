@@ -4,9 +4,16 @@ import { AutocompleteField } from "./AutocompleteField";
 import { DecimalTextInput } from "./DecimalTextInput";
 import { DigitsOnlyInput } from "./DigitsOnlyInput";
 import { TagInput } from "./TagInput";
-import { KINDS } from "../lib/assetDefaults";
+import {
+  ACCESSORY_SUBTYPES,
+  AMMUNITION_SUBTYPES,
+  coerceSubtypeForKind,
+  FIREARM_SUBTYPES,
+  KINDS,
+} from "../lib/assetDefaults";
 import {
   parseNonNegInt,
+  parseOptionalPositiveInt,
   parseOptionalPrice,
 } from "../lib/parseNumeric";
 
@@ -37,6 +44,8 @@ export type AssetFormProps = {
   omitFormTitle?: boolean;
   /** Read-only round totals for firearms (from server). */
   firearmRoundStats?: { lifetime: number; sinceMaintenance: number } | null;
+  /** When this changes (e.g. asset `updatedAt` after save), sync digit fields from `editing`. */
+  serverSyncKey?: string;
 };
 
 export function AssetForm({
@@ -60,6 +69,7 @@ export function AssetForm({
   fetchTagSuggestions,
   omitFormTitle = false,
   firearmRoundStats = null,
+  serverSyncKey = "",
 }: AssetFormProps) {
   const listKey = isNew ? "new" : (selectedId ?? "");
   const [quantityText, setQuantityText] = useState(() =>
@@ -68,6 +78,16 @@ export function AssetForm({
   const [priceText, setPriceText] = useState(() =>
     editing.purchasePrice != null && Number.isFinite(editing.purchasePrice)
       ? String(editing.purchasePrice)
+      : "",
+  );
+  const [maintRoundsText, setMaintRoundsText] = useState(() =>
+    editing.maintenanceEveryNRounds != null && editing.maintenanceEveryNRounds > 0
+      ? String(editing.maintenanceEveryNRounds)
+      : "",
+  );
+  const [maintDaysText, setMaintDaysText] = useState(() =>
+    editing.maintenanceEveryNDays != null && editing.maintenanceEveryNDays > 0
+      ? String(editing.maintenanceEveryNDays)
       : "",
   );
 
@@ -79,6 +99,21 @@ export function AssetForm({
         : "",
     );
   }, [listKey]);
+
+  useEffect(() => {
+    setMaintRoundsText(
+      editing.maintenanceEveryNRounds != null && editing.maintenanceEveryNRounds > 0
+        ? String(editing.maintenanceEveryNRounds)
+        : "",
+    );
+    setMaintDaysText(
+      editing.maintenanceEveryNDays != null && editing.maintenanceEveryNDays > 0
+        ? String(editing.maintenanceEveryNDays)
+        : "",
+    );
+    // Intentionally when asset row identity or server revision changes, not on each keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, serverSyncKey]);
 
   return (
     <>
@@ -112,12 +147,14 @@ export function AssetForm({
           Type
           <select
             value={editing.kind}
-            onChange={(e) =>
-              setEditing({
-                ...editing,
-                kind: e.target.value as AssetKind,
-              })
-            }
+            onChange={(e) => {
+              const k = e.target.value as AssetKind;
+              setEditing((prev) => ({
+                ...prev,
+                kind: k,
+                subtype: coerceSubtypeForKind(k, prev.subtype),
+              }));
+            }}
           >
             {KINDS.map((k) => (
               <option key={k.value} value={k.value}>
@@ -126,6 +163,64 @@ export function AssetForm({
             ))}
           </select>
         </label>
+        {editing.kind === "firearm" ? (
+          <label>
+            Subtype
+            <select
+              value={editing.subtype ?? "other"}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  subtype: e.target.value,
+                })
+              }
+            >
+              {FIREARM_SUBTYPES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : editing.kind === "accessory" ? (
+          <label>
+            Subtype
+            <select
+              value={editing.subtype ?? "other"}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  subtype: e.target.value,
+                })
+              }
+            >
+              {ACCESSORY_SUBTYPES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : editing.kind === "ammunition" ? (
+          <label>
+            Subtype
+            <select
+              value={editing.subtype ?? "rifle"}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  subtype: e.target.value,
+                })
+              }
+            >
+              {AMMUNITION_SUBTYPES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="span-2">
           Name
           <input
@@ -210,6 +305,43 @@ export function AssetForm({
                 {firearmRoundStats.sinceMaintenance.toLocaleString()}
               </span>
             </div>
+          </>
+        ) : null}
+        {editing.kind === "firearm" ? (
+          <>
+            <label>
+              Maintenance every N rounds
+              <DigitsOnlyInput
+                aria-label="Maintenance every N rounds"
+                value={maintRoundsText}
+                onChange={(digits) => {
+                  setMaintRoundsText(digits);
+                  setEditing({
+                    ...editing,
+                    maintenanceEveryNRounds: parseOptionalPositiveInt(digits),
+                  });
+                }}
+              />
+            </label>
+            <label>
+              Maintenance every N days
+              <DigitsOnlyInput
+                aria-label="Maintenance every N days"
+                value={maintDaysText}
+                onChange={(digits) => {
+                  setMaintDaysText(digits);
+                  setEditing({
+                    ...editing,
+                    maintenanceEveryNDays: parseOptionalPositiveInt(digits),
+                  });
+                }}
+              />
+            </label>
+            <p className="field-notice span-2">
+              Leave blank for no reminder. The dashboard lists firearms within 10% of
+              these thresholds (round count or days until due). Days count from your last
+              maintenance record, else purchase date, else when the asset was created.
+            </p>
           </>
         ) : null}
         <label>

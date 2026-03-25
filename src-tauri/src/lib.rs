@@ -57,6 +57,7 @@ pub fn run() {
             commands::delete_range_day,
             commands::add_asset_maintenance,
             commands::list_asset_maintenance,
+            commands::get_dashboard_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -55,7 +55,7 @@ From the repository root (`asset-manager/`):
 
 ### Development sample data (debug builds)
 
-On **`npm run tauri dev`** (debug builds only), the app may **seed the database once** with a small set of sample assets (a couple of rows per kind: firearm, part, accessory, ammunition). Whether seeding has already run is stored in SQLite (`app_settings` key `dev_inventory_seeded`), so **later dev sessions do not insert duplicates**.
+On **`npm run tauri dev`** (debug builds only), the app may **seed the database once** with a richer sample set: **six** firearms (mixed calibers and maintenance settings), **six** ammunition rows (at least one per firearm caliber), two parts, and two accessories, plus a few **completed** range days for usage stats. Whether seeding has already run is stored in SQLite (`app_settings` key `dev_inventory_seeded`), so **later dev sessions do not insert duplicates**.
 
 To wipe inventory and seed again, open **Settings** while running **`npm run tauri dev`**: under the **Development** section (shown only in Vite dev builds), use **Drop & reseed database**. That action is not available in release builds.
 
@@ -94,10 +94,17 @@ App preferences (including an optional external API key) are stored in the same 
 
 ### Using the application
 
+**Dashboard**
+
+- The home view uses two columns on wide windows: **range-day shortcuts** on the left and **widgets** on the right (they stack on smaller screens).
+- **Ammo by caliber** is a donut chart of **rounds on hand** (sum of ammunition **Quantity**), grouped by **caliber** (blank calibers count as “Unknown”).
+- **Upcoming maintenance** lists **firearms** that have a maintenance interval set and are **within 10%** of that threshold: either **rounds since last maintenance** versus **Maintenance every N rounds**, or **days until the next due date** versus **Maintenance every N days**. The next due date is computed from the **most recent maintenance record** on that gun; if there are none, from **purchase date**, otherwise from when the asset was **created**. **Overdue** day-based maintenance appears too. Names link to **All assets** and open that firearm in the edit drawer.
+- **Top firearms** ranks guns by **lifetime rounds fired** (from completed range days), then by how many **completed** range days include that firearm. Names also link to the asset drawer.
+
 **Assets**
 
-- Open **All assets** to browse, search, filter by type and tags, and create or edit rows in the side drawer.
-- **Firearms** show lifetime rounds and rounds since last maintenance (updated when you complete a range day or add a maintenance record). The **Maintenance** block at the bottom of the drawer matches the main form layout: optional performed date/time, notes, and **Add maintenance** (which resets “rounds since maintenance” for that gun).
+- Open **All assets** to browse, search, filter by type and tags, and create or edit rows in the side drawer. The table’s first column shows a **silhouette icon** from the asset **kind** and, for **firearms** and **accessories**, the optional **subtype** (e.g. pistol vs rifle, scope vs red dot); the same icon appears next to the drawer title when editing.
+- **Firearms** show lifetime rounds and rounds since last maintenance (updated when you complete a range day or add a maintenance record). Optional **Maintenance every N rounds** and **Maintenance every N days** drive the dashboard reminder rules above; leave them blank to disable. The **Maintenance** block at the bottom of the drawer matches the main form layout: optional performed date/time, notes, and **Add maintenance** (which resets “rounds since maintenance” for that gun and anchors the day-based countdown from that performed date).
 - **Quantity** and **purchase price** use plain text numeric fields (not the browser’s native number spinners) so values are easy to type and edit.
 
 **Range days**

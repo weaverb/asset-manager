@@ -1,26 +1,14 @@
 //! Debug-only inventory seeding for local development (`tauri dev`).
 
 use crate::db::{self, AssetInput};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use std::path::Path;
 
 /// Stored in `app_settings` so we only auto-seed once per dev database.
 pub const DEV_SEED_FLAG_KEY: &str = "dev_inventory_seeded";
 
-const KINDS: &[&str] = &["firearm", "part", "accessory", "ammunition"];
-
-const MANUFACTURERS: &[&str] = &[
-    "DevWorks Mfg",
-    "Northfield Supply",
-    "Acme Tactical",
-    "Horizon Outdoors",
-];
-
-const MODELS: &[&str] = &["Alpha-100", "Bravo Mk II", "Charlie Lite", "Delta Pro"];
-
-const CALIBERS: &[&str] = &["9mm", ".223 Rem", ".308 Win", "12 ga", "5.56 NATO"];
-
-const TAG_POOL: &[&str] = &["dev", "range", "hunting", "competition", "home"];
+const TAG_DEV: &str = "dev";
+const TAG_RANGE: &str = "range";
 
 /// If this is a debug build and the DB has not been marked seeded, insert sample rows.
 pub fn ensure_dev_seed(conn: &Connection, images_dir: &Path) -> Result<(), String> {
@@ -66,75 +54,318 @@ fn wipe_inventory(conn: &Connection, images_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn seed_inventory(conn: &Connection, _images_dir: &Path) -> Result<(), String> {
-    let mut n = 0usize;
-    for &kind in KINDS {
-        for slot in 0..2 {
-            let input = sample_asset_input(kind, n, slot);
-            db::create_asset(conn, input)?;
-            n += 1;
-        }
+#[allow(clippy::too_many_arguments)]
+fn asset_input(
+    kind: &str,
+    name: &str,
+    manufacturer: &str,
+    model: &str,
+    serial: &str,
+    caliber: Option<&str>,
+    quantity: i64,
+    purchase_date: Option<&str>,
+    maint_r: Option<i64>,
+    maint_d: Option<i64>,
+    subtype: Option<&str>,
+    notes: &str,
+) -> AssetInput {
+    AssetInput {
+        kind: kind.to_string(),
+        name: name.to_string(),
+        manufacturer: Some(manufacturer.to_string()),
+        model: Some(model.to_string()),
+        serial_number: Some(serial.to_string()),
+        caliber: caliber.map(|s| s.to_string()),
+        quantity: Some(quantity),
+        purchase_date: purchase_date.map(|s| s.to_string()),
+        purchase_price: Some(0.0),
+        notes: Some(notes.to_string()),
+        extra_json: Some("{}".into()),
+        maintenance_every_n_rounds: maint_r,
+        maintenance_every_n_days: maint_d,
+        subtype: subtype.map(|s| s.to_string()),
+        tags: Some(vec![TAG_DEV.into(), TAG_RANGE.into()]),
+    }
+}
+
+fn seed_completed_range_day(
+    conn: &Connection,
+    scheduled_date: &str,
+    rounds: &[(String, i64)],
+) -> Result<(), String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO range_days (id, scheduled_date, status, notes, completed_at, created_at, updated_at)
+         VALUES (?1, ?2, 'completed', NULL, ?3, ?3, ?3)",
+        params![id, scheduled_date, now],
+    )
+    .map_err(|e| e.to_string())?;
+    for (asset_id, r) in rounds {
+        conn.execute(
+            "INSERT INTO range_day_items (range_day_id, asset_id, rounds_fired) VALUES (?1, ?2, ?3)",
+            params![id, asset_id, r],
+        )
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
-fn sample_asset_input(kind: &str, global_idx: usize, slot: usize) -> AssetInput {
-    let mfg = MANUFACTURERS[global_idx % MANUFACTURERS.len()].to_string();
-    let model = MODELS[(global_idx + slot) % MODELS.len()].to_string();
-    let caliber = CALIBERS[global_idx % CALIBERS.len()].to_string();
-    let quantity = if kind == "ammunition" {
-        50 + (global_idx as i64 * 17) % 450
-    } else {
-        1
-    };
-    let title = match kind {
-        "firearm" => "Firearm",
-        "part" => "Part",
-        "accessory" => "Accessory",
-        "ammunition" => "Ammunition",
-        _ => "Asset",
-    };
-    let name = format!("Dev {} {}-{}", title, global_idx + 1, slot + 1);
-    let t1 = TAG_POOL[global_idx % TAG_POOL.len()].to_string();
-    let t2 = TAG_POOL[(global_idx + slot + 1) % TAG_POOL.len()].to_string();
-    let tag_pair = if t1.eq_ignore_ascii_case(&t2) {
-        vec![t1]
-    } else {
-        vec![t1, t2]
-    };
-    AssetInput {
-        kind: kind.to_string(),
-        name,
-        manufacturer: Some(mfg),
-        model: Some(model),
-        serial_number: Some(format!("DEV-{:04}-{}", global_idx, slot)),
-        caliber: Some(caliber),
-        quantity: Some(quantity),
-        purchase_date: None,
-        purchase_price: Some(99.0 + (global_idx as f64) * 12.5),
-        notes: Some("Seeded for local development.".into()),
-        extra_json: Some("{}".into()),
-        tags: Some(tag_pair),
+fn seed_inventory(conn: &Connection, _images_dir: &Path) -> Result<(), String> {
+    // Six firearms (distinct calibers for range-day ammo pairing); varied maintenance settings.
+    let g1 = db::create_asset(
+        conn,
+        asset_input(
+            "firearm",
+            "Dev Pistol 9mm",
+            "DevWorks Mfg",
+            "Alpha-100",
+            "DEV-G1-9MM",
+            Some("9mm"),
+            1,
+            Some("2019-06-01"),
+            Some(1000),
+            Some(180),
+            Some("pistol"),
+            "Near round threshold; schedule from purchase date.",
+        ),
+    )?;
+    let g2 = db::create_asset(
+        conn,
+        asset_input(
+            "firearm",
+            "Dev AR .223",
+            "Acme Tactical",
+            "Bravo Mk II",
+            "DEV-G2-223",
+            Some(".223 Rem"),
+            1,
+            Some("2021-03-15"),
+            Some(500),
+            None,
+            Some("semi_auto"),
+            "Round-interval only; higher lifetime use.",
+        ),
+    )?;
+    let g3 = db::create_asset(
+        conn,
+        asset_input(
+            "firearm",
+            "Dev Bolt .308",
+            "Northfield Supply",
+            "Charlie Lite",
+            "DEV-G3-308",
+            Some(".308 Win"),
+            1,
+            Some("2020-01-01"),
+            None,
+            Some(14),
+            Some("bolt_action"),
+            "Short day interval from purchase → overdue dashboard sample.",
+        ),
+    )?;
+    let g4 = db::create_asset(
+        conn,
+        asset_input(
+            "firearm",
+            "Dev Shotgun 12ga",
+            "Horizon Outdoors",
+            "Delta Pro",
+            "DEV-G4-12",
+            Some("12 ga"),
+            1,
+            Some("2022-08-20"),
+            None,
+            None,
+            Some("shotgun"),
+            "No maintenance intervals (control).",
+        ),
+    )?;
+    let g5 = db::create_asset(
+        conn,
+        asset_input(
+            "firearm",
+            "Dev PCC 9mm",
+            "DevWorks Mfg",
+            "Charlie Lite",
+            "DEV-G5-9MM2",
+            Some("9mm"),
+            1,
+            None,
+            Some(2000),
+            Some(365),
+            Some("other"),
+            "Both intervals; second 9mm for caliber matching tests.",
+        ),
+    )?;
+    let g6 = db::create_asset(
+        conn,
+        asset_input(
+            "firearm",
+            "Dev Carbine 5.56",
+            "Acme Tactical",
+            "Delta Pro",
+            "DEV-G6-556",
+            Some("5.56 NATO"),
+            1,
+            Some("2023-01-10"),
+            None,
+            Some(120),
+            Some("semi_auto"),
+            "Day-based reminder from purchase.",
+        ),
+    )?;
+
+    // At least one ammo asset per firearm caliber (exact caliber strings).
+    for (name, cal, qty, ammo_sub) in [
+        ("Dev Ammo 9mm (box A)", "9mm", 220_i64, "pistol"),
+        ("Dev Ammo 9mm (box B)", "9mm", 180, "pistol"),
+        ("Dev Ammo .223", ".223 Rem", 400, "rifle"),
+        ("Dev Ammo .308", ".308 Win", 120, "rifle"),
+        ("Dev Ammo 12 ga", "12 ga", 75, "shotgun"),
+        ("Dev Ammo 5.56", "5.56 NATO", 350, "rifle"),
+    ] {
+        db::create_asset(
+            conn,
+            asset_input(
+                "ammunition",
+                name,
+                "Northfield Supply",
+                "Bravo Mk II",
+                "AMMO-DEV",
+                Some(cal),
+                qty,
+                None,
+                None,
+                None,
+                Some(ammo_sub),
+                "Seeded ammunition for dev.",
+            ),
+        )?;
     }
+
+    // Parts and accessories (two each).
+    db::create_asset(
+        conn,
+        asset_input(
+            "part",
+            "Dev spare spring",
+            "DevWorks Mfg",
+            "Alpha-100",
+            "PART-1",
+            None,
+            1,
+            None,
+            None,
+            None,
+            None,
+            "Seeded part.",
+        ),
+    )?;
+    db::create_asset(
+        conn,
+        asset_input(
+            "part",
+            "Dev firing pin",
+            "Acme Tactical",
+            "Bravo Mk II",
+            "PART-2",
+            None,
+            1,
+            None,
+            None,
+            None,
+            None,
+            "Seeded part.",
+        ),
+    )?;
+    db::create_asset(
+        conn,
+        asset_input(
+            "accessory",
+            "Dev sling",
+            "Horizon Outdoors",
+            "Delta Pro",
+            "ACC-1",
+            None,
+            1,
+            None,
+            None,
+            None,
+            Some("other"),
+            "Seeded accessory.",
+        ),
+    )?;
+    db::create_asset(
+        conn,
+        asset_input(
+            "accessory",
+            "Dev LPVO scope",
+            "Northfield Supply",
+            "Charlie Lite",
+            "ACC-2",
+            None,
+            1,
+            None,
+            None,
+            None,
+            Some("scope"),
+            "Seeded accessory.",
+        ),
+    )?;
+
+    // Usage counters for dashboard “top firearms” and maintenance widget.
+    conn.execute(
+        "UPDATE assets SET lifetime_rounds_fired = 1850, rounds_fired_since_maintenance = 920 WHERE id = ?1",
+        params![g1.id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE assets SET lifetime_rounds_fired = 2400, rounds_fired_since_maintenance = 120 WHERE id = ?1",
+        params![g2.id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE assets SET lifetime_rounds_fired = 400, rounds_fired_since_maintenance = 0 WHERE id = ?1",
+        params![g3.id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE assets SET lifetime_rounds_fired = 150, rounds_fired_since_maintenance = 10 WHERE id = ?1",
+        params![g4.id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE assets SET lifetime_rounds_fired = 600, rounds_fired_since_maintenance = 400 WHERE id = ?1",
+        params![g5.id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE assets SET lifetime_rounds_fired = 80, rounds_fired_since_maintenance = 5 WHERE id = ?1",
+        params![g6.id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Completed range days (counts for “top firearms” widget).
+    seed_completed_range_day(
+        conn,
+        "2024-06-10",
+        &[(g1.id.clone(), 200), (g2.id.clone(), 150)],
+    )?;
+    seed_completed_range_day(conn, "2024-07-04", &[(g1.id.clone(), 100)])?;
+    seed_completed_range_day(
+        conn,
+        "2024-08-01",
+        &[(g2.id.clone(), 300), (g5.id.clone(), 50)],
+    )?;
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
-
-    #[test]
-    fn sample_asset_input_ammunition_quantity() {
-        let a = sample_asset_input("ammunition", 3, 0);
-        assert!(a.quantity.unwrap_or(0) > 1);
-        assert_eq!(a.kind, "ammunition");
-    }
-
-    #[test]
-    fn sample_asset_input_firearm_quantity_one() {
-        let a = sample_asset_input("firearm", 0, 0);
-        assert_eq!(a.quantity, Some(1));
-    }
 
     #[test]
     fn seed_sets_flag_and_creates_rows() {
@@ -146,11 +377,15 @@ mod tests {
         seed_inventory(&conn, &img).unwrap();
         db::set_setting(&conn, DEV_SEED_FLAG_KEY, "1").unwrap();
         let all = db::list_assets(&conn, None, &[]).unwrap();
-        assert_eq!(all.len(), 8);
+        assert_eq!(all.len(), 16);
         let kinds: std::collections::HashSet<_> = all.iter().map(|a| a.kind.as_str()).collect();
-        for k in KINDS {
-            assert!(kinds.contains(*k));
+        for k in ["firearm", "ammunition", "part", "accessory"] {
+            assert!(kinds.contains(k));
         }
+        let guns: Vec<_> = all.iter().filter(|a| a.kind == "firearm").collect();
+        assert_eq!(guns.len(), 6);
+        let ammo: Vec<_> = all.iter().filter(|a| a.kind == "ammunition").collect();
+        assert_eq!(ammo.len(), 6);
     }
 
     #[test]
@@ -179,7 +414,7 @@ mod tests {
         let n1 = db::list_assets(&conn, None, &[]).unwrap().len();
         ensure_dev_seed(&conn, &img).unwrap();
         let n2 = db::list_assets(&conn, None, &[]).unwrap().len();
-        assert_eq!(n1, 8);
-        assert_eq!(n2, 8);
+        assert_eq!(n1, 16);
+        assert_eq!(n2, 16);
     }
 }

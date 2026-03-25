@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ConfirmModal } from "./components/ConfirmModal";
+import { SilhouetteSvgBrowserModal } from "./components/SilhouetteSvgBrowserModal";
 import { AssetsListProvider, useAssetsList } from "./context/AssetsListContext";
 import { ToastProvider, useToast } from "./context/ToastContext";
 import type { AppSettings } from "./types";
@@ -38,9 +39,13 @@ function AppShellInner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gunspecKeyDraft, setGunspecKeyDraft] = useState("");
   const [devReseedConfirmOpen, setDevReseedConfirmOpen] = useState(false);
+  const [svgBrowserOpen, setSvgBrowserOpen] = useState(false);
 
   useEffect(() => {
-    if (!settingsOpen) setDevReseedConfirmOpen(false);
+    if (!settingsOpen) {
+      setDevReseedConfirmOpen(false);
+      setSvgBrowserOpen(false);
+    }
   }, [settingsOpen]);
 
   const openSettings = async () => {
@@ -203,6 +208,13 @@ function AppShellInner() {
                     >
                       Drop &amp; reseed database
                     </button>
+                    <button
+                      type="button"
+                      className="primary ghost"
+                      onClick={() => setSvgBrowserOpen(true)}
+                    >
+                      Open silhouette SVG preview…
+                    </button>
                   </div>
                 ) : null}
                 <div className="modal-actions">
@@ -222,6 +234,13 @@ function AppShellInner() {
             document.body,
           )
         : null}
+
+      {import.meta.env.DEV ? (
+        <SilhouetteSvgBrowserModal
+          open={svgBrowserOpen}
+          onClose={() => setSvgBrowserOpen(false)}
+        />
+      ) : null}
 
       {devReseedConfirmOpen ? (
         <ConfirmModal

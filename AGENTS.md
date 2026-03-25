@@ -111,3 +111,5 @@ Tauri’s release flow reads these consistently; drifting versions cause confusi
 - **Coverage:** `test:rust:coverage` ignores `lib.rs` and `main.rs` in the threshold regex; extend tests rather than lowering the bar without team agreement.
 
 When instructions here conflict with an explicit user message in chat, **follow the user**.
+
+When making changes assume the user wants all documentation to be updated to reflect the changes.
