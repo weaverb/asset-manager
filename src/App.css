@@ -273,6 +273,407 @@ body {
   background: #1d4ed8;
 }
 
+.dashboard-cta--small {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.page-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.page-head-row h2 {
+  margin: 0;
+}
+
+.link-back {
+  font-size: 0.9rem;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.link-back:hover {
+  text-decoration: underline;
+}
+
+.block-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  max-width: 20rem;
+}
+
+.block-label input,
+.block-label textarea {
+  font: inherit;
+}
+
+.firearm-fieldset {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.firearm-fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.firearm-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.firearm-check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.firearm-check-label input {
+  margin-top: 0.2rem;
+}
+
+.form-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.data-table thead th {
+  font-weight: 600;
+  color: #374151;
+  background: #f9fafb;
+}
+
+.status-pill {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+}
+
+.status-pill--planned {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.status-pill--completed {
+  border-color: #6ee7b7;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-pill--cancelled {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.range-day-meta {
+  margin-bottom: 1.25rem;
+}
+
+.section-rule {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+.rounds-input-list,
+.rounds-summary-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rounds-input-list label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 22rem;
+}
+
+.rounds-input-list input {
+  font: inherit;
+}
+
+.rounds-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rounds-input-row .digits-only-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+button.rounds-fill-btn {
+  flex-shrink: 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.rounds-summary-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.danger-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #fee2e2;
+}
+
+.range-day-planned-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #fee2e2;
+}
+
+.range-day-planned-footer-danger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+button.ghost.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: transparent;
+}
+
+.preserve-lines {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.dashboard-range-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  max-width: 36rem;
+}
+
+.dashboard-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.dashboard-section-head h3 {
+  margin: 0;
+}
+
+.dashboard-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dashboard-subheading {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dashboard-range-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-range-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dashboard-range-list a {
+  font-weight: 500;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.dashboard-range-list a:hover {
+  text-decoration: underline;
+}
+
+.readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.readonly-field-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.readonly-field-value {
+  font-size: 1rem;
+  color: #111827;
+}
+
+.maintenance-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.maintenance-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.maintenance-section-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.maintenance-section-lead {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.maintenance-empty {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.maintenance-log {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.maintenance-log li {
+  padding: 0.5rem 0.65rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.maintenance-log time {
+  display: block;
+  font-weight: 600;
+  color: #374151;
+}
+
+.maintenance-log .maint-notes {
+  margin: 0.25rem 0 0;
+  color: #4b5563;
+}
+
+.maintenance-add-form.form-grid {
+  margin-top: 0.25rem;
+  max-width: 720px;
+}
+
+.maintenance-form-actions {
+  margin-top: 0.15rem;
+}
+
+.range-day-subhead {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.text-warn {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.ammo-split-block {
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.75rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.ammo-split-head {
+  margin: 0 0 0.5rem;
+}
+
+.ammo-complete-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ammo-complete-summary > li {
+  margin-bottom: 0.75rem;
+}
+
+.ammo-complete-summary ul {
+  margin: 0.35rem 0 0 1rem;
+  padding: 0;
+}
+
 .assets-layout {
   flex: 1;
   display: flex;
@@ -937,6 +1338,92 @@ button.danger:hover {
   border-bottom: 1px solid #fecaca;
 }
 
+.toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast-stack .toast {
+  pointer-events: auto;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  animation: toast-in 0.2s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-message {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.toast-dismiss {
+  flex-shrink: 0;
+  margin: -0.2rem -0.15rem -0.2rem 0;
+  padding: 0.15rem 0.35rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.toast-dismiss:hover {
+  opacity: 1;
+}
+
+.toast--error {
+  background: #fef2f2;
+  color: #7f1d1d;
+  border: 1px solid #fecaca;
+}
+
+.toast--success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.toast--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.decimal-text-input {
+  font: inherit;
+}
+
 .main {
   flex: 1;
   display: grid;
@@ -1462,6 +1949,125 @@ button.primary.danger-solid:hover {
 
   .confirm-modal-msg {
     color: #d1d5db;
+  }
+
+  .firearm-fieldset {
+    border-color: #374151;
+  }
+
+  .data-table th,
+  .data-table td {
+    border-bottom-color: #374151;
+  }
+
+  .data-table thead th {
+    background: #111827;
+    color: #e5e7eb;
+  }
+
+  .status-pill {
+    border-color: #4b5563;
+    background: #1f2937;
+    color: #d1d5db;
+  }
+
+  .status-pill--planned {
+    border-color: #3b82f6;
+    background: #1e3a5f;
+    color: #bfdbfe;
+  }
+
+  .status-pill--completed {
+    border-color: #059669;
+    background: #064e3b;
+    color: #a7f3d0;
+  }
+
+  .status-pill--cancelled {
+    border-color: #4b5563;
+    background: #374151;
+    color: #9ca3af;
+  }
+
+  .section-rule {
+    border-top-color: #374151;
+  }
+
+  .rounds-summary-list li {
+    border-bottom-color: #374151;
+  }
+
+  .danger-actions,
+  .range-day-planned-footer {
+    border-top-color: #450a0a;
+  }
+
+  .dashboard-range-section {
+    border-top-color: #374151;
+  }
+
+  .dashboard-range-list li {
+    border-bottom-color: #374151;
+  }
+
+  .readonly-field-label {
+    color: #9ca3af;
+  }
+
+  .readonly-field-value {
+    color: #e5e7eb;
+  }
+
+  .maintenance-section {
+    border-top-color: #374151;
+  }
+
+  .maintenance-log li {
+    background: #111827;
+    border-color: #374151;
+  }
+
+  .maintenance-log time {
+    color: #e5e7eb;
+  }
+
+  .maintenance-log .maint-notes {
+    color: #9ca3af;
+  }
+
+  .link-back {
+    color: #93c5fd;
+  }
+
+  .ammo-split-block {
+    background: #111827;
+    border-color: #374151;
+  }
+
+  .text-warn {
+    color: #fcd34d;
+  }
+
+  .toast {
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px #374151;
+  }
+
+  .toast--error {
+    background: #450a0a;
+    color: #fecaca;
+    border-color: #7f1d1d;
+  }
+
+  .toast--success {
+    background: #052e16;
+    color: #a7f3d0;
+    border-color: #047857;
+  }
+
+  .toast--info {
+    background: #1e3a5f;
+    color: #bfdbfe;
+    border-color: #1d4ed8;
   }
 }
 

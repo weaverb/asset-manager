@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ConfirmModal } from "./components/ConfirmModal";
 import { AssetsListProvider, useAssetsList } from "./context/AssetsListContext";
+import { ToastProvider, useToast } from "./context/ToastContext";
 import type { AppSettings } from "./types";
 import { invoke } from "./tauri";
 
@@ -30,12 +31,12 @@ function AppShellInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const onAssets = location.pathname.startsWith("/assets");
-  const { query, setQuery, setListError } = useAssetsList();
+  const onRangeDays = location.pathname.startsWith("/range-days");
+  const { query, setQuery } = useAssetsList();
+  const { pushToast } = useToast();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gunspecKeyDraft, setGunspecKeyDraft] = useState("");
-  const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [devToolMessage, setDevToolMessage] = useState<string | null>(null);
   const [devReseedConfirmOpen, setDevReseedConfirmOpen] = useState(false);
 
   useEffect(() => {
@@ -43,26 +44,24 @@ function AppShellInner() {
   }, [settingsOpen]);
 
   const openSettings = async () => {
-    setSettingsError(null);
-    setDevToolMessage(null);
     try {
       const s = await invoke<AppSettings>("get_app_settings");
       setGunspecKeyDraft(s.gunspecApiKey ?? "");
       setSettingsOpen(true);
     } catch (e) {
-      setSettingsError(String(e));
+      pushToast(String(e), "error");
     }
   };
 
   const saveSettings = async () => {
-    setSettingsError(null);
     try {
       await invoke("save_app_settings", {
         settings: { gunspecApiKey: gunspecKeyDraft.trim() },
       });
       setSettingsOpen(false);
+      pushToast("Settings saved.", "success");
     } catch (e) {
-      setSettingsError(String(e));
+      pushToast(String(e), "error");
     }
   };
 
@@ -91,6 +90,14 @@ function AppShellInner() {
             >
               All assets
             </NavLink>
+            <NavLink
+              to="/range-days"
+              className={({ isActive }) =>
+                isActive ? "nav-link active" : "nav-link"
+              }
+            >
+              Range days
+            </NavLink>
           </nav>
           {onAssets ? (
             <>
@@ -98,10 +105,7 @@ function AppShellInner() {
                 className="search floating-header-search"
                 placeholder="Search (full text)…"
                 value={query}
-                onChange={(e) => {
-                  setListError(null);
-                  setQuery(e.target.value);
-                }}
+                onChange={(e) => setQuery(e.target.value)}
               />
               <button
                 type="button"
@@ -111,6 +115,15 @@ function AppShellInner() {
                 New asset
               </button>
             </>
+          ) : null}
+          {onRangeDays ? (
+            <button
+              type="button"
+              className="primary floating-header-new"
+              onClick={() => navigate("/range-days/new")}
+            >
+              New range day
+            </button>
           ) : null}
           <button
             type="button"
@@ -174,9 +187,6 @@ function AppShellInner() {
                     spellCheck={false}
                   />
                 </label>
-                {settingsError ? (
-                  <p className="modal-error">{settingsError}</p>
-                ) : null}
                 {import.meta.env.DEV ? (
                   <div className="modal-field dev-only-settings">
                     <h3 className="dev-settings-title">Development</h3>
@@ -193,9 +203,6 @@ function AppShellInner() {
                     >
                       Drop &amp; reseed database
                     </button>
-                    {devToolMessage ? (
-                      <p className="modal-dev-ok">{devToolMessage}</p>
-                    ) : null}
                   </div>
                 ) : null}
                 <div className="modal-actions">
@@ -224,16 +231,15 @@ function AppShellInner() {
           onCancel={() => setDevReseedConfirmOpen(false)}
           onConfirm={() => {
             setDevReseedConfirmOpen(false);
-            setSettingsError(null);
-            setDevToolMessage(null);
             void (async () => {
               try {
                 await invoke("dev_drop_and_reseed");
-                setDevToolMessage(
+                pushToast(
                   "Done. Open “All assets” again (or reload the page) to see seeded rows.",
+                  "success",
                 );
               } catch (e) {
-                setSettingsError(String(e));
+                pushToast(String(e), "error");
               }
             })();
           }}
@@ -241,9 +247,6 @@ function AppShellInner() {
       ) : null}
 
       <div className="app-body app-body--floating">
-        {settingsError && !settingsOpen ? (
-          <div className="banner error">{settingsError}</div>
-        ) : null}
         <Outlet />
       </div>
     </div>
@@ -252,8 +255,10 @@ function AppShellInner() {
 
 export function AppShell() {
   return (
-    <AssetsListProvider>
-      <AppShellInner />
-    </AssetsListProvider>
+    <ToastProvider>
+      <AssetsListProvider>
+        <AppShellInner />
+      </AssetsListProvider>
+    </ToastProvider>
   );
 }

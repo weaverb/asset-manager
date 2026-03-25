@@ -6,6 +6,7 @@ import { TagInput } from "../components/TagInput";
 import { KINDS } from "../lib/assetDefaults";
 import { invoke } from "../tauri";
 import { useAssetsList } from "../context/AssetsListContext";
+import { useToast } from "../context/ToastContext";
 
 function PencilIcon() {
   return (
@@ -113,9 +114,8 @@ export function AssetTable() {
     setKindFilter,
     tagFilters,
     setTagFilters,
-    listError,
-    setListError,
   } = useAssetsList();
+  const { pushToast } = useToast();
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -149,8 +149,6 @@ export function AssetTable() {
 
   return (
     <main className="page-main assets-page">
-      {listError ? <div className="banner error">{listError}</div> : null}
-
       <div className="table-wrap assets-table-wrap">
         <table className="asset-table">
           <thead>
@@ -164,10 +162,9 @@ export function AssetTable() {
                   <select
                     className="select"
                     value={kindFilter}
-                    onChange={(e) => {
-                      setListError(null);
-                      setKindFilter(e.target.value as AssetKind | "all");
-                    }}
+                    onChange={(e) =>
+                      setKindFilter(e.target.value as AssetKind | "all")
+                    }
                     title="Filter by type"
                   >
                     <option value="all">All types</option>
@@ -185,10 +182,7 @@ export function AssetTable() {
                       variant="toolbar"
                       label="Tags"
                       tags={tagFilters}
-                      onChange={(next) => {
-                        setListError(null);
-                        setTagFilters(next);
-                      }}
+                      onChange={(next) => setTagFilters(next)}
                       fetchSuggestions={async (q) => {
                         const r = await invoke<FieldSuggestions>("suggest_tags", {
                           query: q,
@@ -298,7 +292,6 @@ export function AssetTable() {
           confirmLabel="Delete"
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
-            setListError(null);
             void (async () => {
               try {
                 await invoke("delete_asset", {
@@ -307,7 +300,7 @@ export function AssetTable() {
                 setDeleteTarget(null);
                 await refreshList();
               } catch (e) {
-                setListError(String(e));
+                pushToast(String(e), "error");
                 setDeleteTarget(null);
               }
             })();

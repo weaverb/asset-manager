@@ -5,6 +5,9 @@ import { AppShell } from "./AppShell";
 import { AssetDrawerRoute } from "./pages/AssetDrawerRoute";
 import { AssetsLayout, EmptyDrawerSlot } from "./pages/AssetsLayout";
 import { DashboardPage } from "./pages/DashboardPage";
+import { RangeDayDetailPage } from "./pages/RangeDayDetailPage";
+import { RangeDayNewPage } from "./pages/RangeDayNewPage";
+import { RangeDaysPage } from "./pages/RangeDaysPage";
 
 function NotTauri() {
   return (
@@ -36,6 +39,9 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
+          <Route path="range-days" element={<RangeDaysPage />} />
+          <Route path="range-days/new" element={<RangeDayNewPage />} />
+          <Route path="range-days/:rangeDayId" element={<RangeDayDetailPage />} />
           <Route path="assets" element={<AssetsLayout />}>
             <Route index element={<EmptyDrawerSlot />} />
             <Route path="new" element={<AssetDrawerRoute />} />

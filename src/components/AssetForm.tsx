@@ -1,8 +1,14 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { AssetImage, AssetInput, AssetKind } from "../types";
 import { AutocompleteField } from "./AutocompleteField";
+import { DecimalTextInput } from "./DecimalTextInput";
+import { DigitsOnlyInput } from "./DigitsOnlyInput";
 import { TagInput } from "./TagInput";
 import { KINDS } from "../lib/assetDefaults";
+import {
+  parseNonNegInt,
+  parseOptionalPrice,
+} from "../lib/parseNumeric";
 
 export type AssetFormProps = {
   editing: AssetInput;
@@ -29,6 +35,8 @@ export type AssetFormProps = {
   fetchTagSuggestions: (query: string) => Promise<string[]>;
   /** When true, only the action buttons show in the top bar (title lives in the drawer). */
   omitFormTitle?: boolean;
+  /** Read-only round totals for firearms (from server). */
+  firearmRoundStats?: { lifetime: number; sinceMaintenance: number } | null;
 };
 
 export function AssetForm({
@@ -51,7 +59,27 @@ export function AssetForm({
   setModelGunspecNotice,
   fetchTagSuggestions,
   omitFormTitle = false,
+  firearmRoundStats = null,
 }: AssetFormProps) {
+  const listKey = isNew ? "new" : (selectedId ?? "");
+  const [quantityText, setQuantityText] = useState(() =>
+    String(editing.quantity ?? 1),
+  );
+  const [priceText, setPriceText] = useState(() =>
+    editing.purchasePrice != null && Number.isFinite(editing.purchasePrice)
+      ? String(editing.purchasePrice)
+      : "",
+  );
+
+  useEffect(() => {
+    setQuantityText(String(editing.quantity ?? 1));
+    setPriceText(
+      editing.purchasePrice != null && Number.isFinite(editing.purchasePrice)
+        ? String(editing.purchasePrice)
+        : "",
+    );
+  }, [listKey]);
+
   return (
     <>
       <div
@@ -154,18 +182,36 @@ export function AssetForm({
         </label>
         <label>
           Quantity
-          <input
-            type="number"
-            min={0}
-            value={editing.quantity ?? 1}
-            onChange={(e) =>
+          <DigitsOnlyInput
+            aria-label="Quantity"
+            value={quantityText}
+            onChange={(digits) => {
+              setQuantityText(digits);
               setEditing({
                 ...editing,
-                quantity: Number.parseInt(e.target.value, 10) || 0,
-              })
-            }
+                quantity: parseNonNegInt(digits),
+              });
+            }}
           />
         </label>
+        {editing.kind === "firearm" && firearmRoundStats ? (
+          <>
+            <div className="readonly-field">
+              <span className="readonly-field-label">Lifetime rounds fired</span>
+              <span className="readonly-field-value">
+                {firearmRoundStats.lifetime.toLocaleString()}
+              </span>
+            </div>
+            <div className="readonly-field">
+              <span className="readonly-field-label">
+                Rounds since maintenance
+              </span>
+              <span className="readonly-field-value">
+                {firearmRoundStats.sinceMaintenance.toLocaleString()}
+              </span>
+            </div>
+          </>
+        ) : null}
         <label>
           Purchase date
           <input
@@ -178,16 +224,14 @@ export function AssetForm({
         </label>
         <label>
           Purchase price
-          <input
-            type="number"
-            step="0.01"
-            value={editing.purchasePrice ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
+          <DecimalTextInput
+            aria-label="Purchase price"
+            value={priceText}
+            onChange={(sanitized) => {
+              setPriceText(sanitized);
               setEditing({
                 ...editing,
-                purchasePrice:
-                  v === "" ? null : Number.parseFloat(v),
+                purchasePrice: parseOptionalPrice(sanitized),
               });
             }}
           />

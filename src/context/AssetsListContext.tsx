@@ -10,6 +10,7 @@ import {
 import { useLocation } from "react-router-dom";
 import type { Asset, AssetKind } from "../types";
 import { invoke } from "../tauri";
+import { useToast } from "./ToastContext";
 
 export type AssetsListContextValue = {
   assets: Asset[];
@@ -20,8 +21,6 @@ export type AssetsListContextValue = {
   setKindFilter: (k: AssetKind | "all") => void;
   tagFilters: string[];
   setTagFilters: (t: string[]) => void;
-  listError: string | null;
-  setListError: (e: string | null) => void;
 };
 
 const AssetsListContext = createContext<AssetsListContextValue | null>(null);
@@ -29,15 +28,14 @@ const AssetsListContext = createContext<AssetsListContextValue | null>(null);
 export function AssetsListProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const onAssetsRoute = location.pathname.startsWith("/assets");
+  const { pushToast } = useToast();
 
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [listError, setListError] = useState<string | null>(null);
 
   const refreshList = useCallback(async () => {
-    setListError(null);
     try {
       const q = query.trim();
       const tagNames = tagFilters.length > 0 ? tagFilters : null;
@@ -57,9 +55,9 @@ export function AssetsListProvider({ children }: { children: ReactNode }) {
           : list;
       setAssets(filtered);
     } catch (e) {
-      setListError(String(e));
+      pushToast(String(e), "error");
     }
-  }, [query, kindFilter, tagFilters]);
+  }, [query, kindFilter, tagFilters, pushToast]);
 
   useEffect(() => {
     if (!onAssetsRoute) return;
@@ -79,10 +77,8 @@ export function AssetsListProvider({ children }: { children: ReactNode }) {
       setKindFilter,
       tagFilters,
       setTagFilters,
-      listError,
-      setListError,
     }),
-    [assets, refreshList, query, kindFilter, tagFilters, listError],
+    [assets, refreshList, query, kindFilter, tagFilters],
   );
 
   return (

@@ -48,6 +48,8 @@ pub fn drop_and_reseed(conn: &Connection, images_dir: &Path) -> Result<(), Strin
 }
 
 fn wipe_inventory(conn: &Connection, images_dir: &Path) -> Result<(), String> {
+    conn.execute("DELETE FROM range_days", [])
+        .map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM assets", [])
         .map_err(|e| e.to_string())?;
     if images_dir.exists() {
