@@ -134,6 +134,10 @@ pub fn init(db_path: &Path, images_dir: &Path) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
 
     ensure_assets_round_columns(&conn)?;
+    ensure_assets_maintenance_interval_columns(&conn)?;
+    ensure_assets_subtype_column(&conn)?;
+    migrate_firearm_rifle_to_bolt_action(&conn)?;
+    migrate_ammunition_subtype_default(&conn)?;
 
     // External-content FTS5 can drift from `assets` (e.g. legacy bugs, interrupted writes).
     // Rebuilding from the content table keeps MATCH results aligned with visible row text.
@@ -173,6 +177,68 @@ fn ensure_assets_round_columns(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_assets_maintenance_interval_columns(conn: &Connection) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(assets)")
+        .map_err(|e| e.to_string())?;
+    let cols: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    if !cols.iter().any(|c| c == "maintenance_every_n_rounds") {
+        conn.execute(
+            "ALTER TABLE assets ADD COLUMN maintenance_every_n_rounds INTEGER",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    if !cols.iter().any(|c| c == "maintenance_every_n_days") {
+        conn.execute(
+            "ALTER TABLE assets ADD COLUMN maintenance_every_n_days INTEGER",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Legacy subtype `rifle` split into `semi_auto` vs `bolt_action`; migrate old rows to bolt.
+fn migrate_firearm_rifle_to_bolt_action(conn: &Connection) -> Result<(), String> {
+    conn.execute(
+        "UPDATE assets SET subtype = 'bolt_action' WHERE kind = 'firearm' AND LOWER(TRIM(COALESCE(subtype, ''))) = 'rifle'",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Legacy ammunition rows had no subtype; default to `rifle` (prior icon behavior).
+fn migrate_ammunition_subtype_default(conn: &Connection) -> Result<(), String> {
+    conn.execute(
+        "UPDATE assets SET subtype = 'rifle' WHERE kind = 'ammunition' AND (subtype IS NULL OR TRIM(subtype) = '')",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn ensure_assets_subtype_column(conn: &Connection) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(assets)")
+        .map_err(|e| e.to_string())?;
+    let cols: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    if !cols.iter().any(|c| c == "subtype") {
+        conn.execute("ALTER TABLE assets ADD COLUMN subtype TEXT", [])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub fn open(db_path: &Path) -> Result<Connection, String> {
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")
@@ -199,6 +265,12 @@ pub struct Asset {
     pub lifetime_rounds_fired: i64,
     #[serde(default)]
     pub rounds_fired_since_maintenance: i64,
+    #[serde(default)]
+    pub maintenance_every_n_rounds: Option<i64>,
+    #[serde(default)]
+    pub maintenance_every_n_days: Option<i64>,
+    #[serde(default)]
+    pub subtype: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     #[serde(default)]
@@ -219,6 +291,12 @@ pub struct AssetInput {
     pub purchase_price: Option<f64>,
     pub notes: Option<String>,
     pub extra_json: Option<String>,
+    #[serde(default)]
+    pub maintenance_every_n_rounds: Option<i64>,
+    #[serde(default)]
+    pub maintenance_every_n_days: Option<i64>,
+    #[serde(default)]
+    pub subtype: Option<String>,
     #[serde(default)]
     pub tags: Option<Vec<String>>,
 }
@@ -250,8 +328,11 @@ fn row_to_asset(row: &rusqlite::Row<'_>) -> rusqlite::Result<Asset> {
         extra_json: row.get(11)?,
         lifetime_rounds_fired: row.get(12)?,
         rounds_fired_since_maintenance: row.get(13)?,
-        created_at: row.get(14)?,
-        updated_at: row.get(15)?,
+        maintenance_every_n_rounds: row.get(14)?,
+        maintenance_every_n_days: row.get(15)?,
+        subtype: row.get(16)?,
+        created_at: row.get(17)?,
+        updated_at: row.get(18)?,
         tags: vec![],
     })
 }
@@ -282,7 +363,7 @@ fn list_assets_sql_values(
     let (filter_tags, tag_clause) = tag_filter_sql(&tags_clean);
 
     let mut sql = String::from(
-        "SELECT a.id, a.kind, a.name, a.manufacturer, a.model, a.serial_number, a.caliber, a.quantity, a.purchase_date, a.purchase_price, a.notes, a.extra_json, a.lifetime_rounds_fired, a.rounds_fired_since_maintenance, a.created_at, a.updated_at FROM assets a WHERE 1=1",
+        "SELECT a.id, a.kind, a.name, a.manufacturer, a.model, a.serial_number, a.caliber, a.quantity, a.purchase_date, a.purchase_price, a.notes, a.extra_json, a.lifetime_rounds_fired, a.rounds_fired_since_maintenance, a.maintenance_every_n_rounds, a.maintenance_every_n_days, a.subtype, a.created_at, a.updated_at FROM assets a WHERE 1=1",
     );
     if filter_tags {
         sql.push_str(&tag_clause);
@@ -446,7 +527,7 @@ pub fn search_assets(
     let (filter_tags, tag_clause) = tag_filter_sql(&tags_clean);
 
     let mut sql = String::from(
-        "SELECT a.id, a.kind, a.name, a.manufacturer, a.model, a.serial_number, a.caliber, a.quantity, a.purchase_date, a.purchase_price, a.notes, a.extra_json, a.lifetime_rounds_fired, a.rounds_fired_since_maintenance, a.created_at, a.updated_at
+        "SELECT a.id, a.kind, a.name, a.manufacturer, a.model, a.serial_number, a.caliber, a.quantity, a.purchase_date, a.purchase_price, a.notes, a.extra_json, a.lifetime_rounds_fired, a.rounds_fired_since_maintenance, a.maintenance_every_n_rounds, a.maintenance_every_n_days, a.subtype, a.created_at, a.updated_at
          FROM assets a
          INNER JOIN assets_fts ON assets_fts.rowid = a.rowid
          WHERE assets_fts MATCH ?1",
@@ -476,7 +557,7 @@ pub fn search_assets(
 pub fn get_asset(conn: &Connection, id: &str) -> Result<Option<Asset>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, kind, name, manufacturer, model, serial_number, caliber, quantity, purchase_date, purchase_price, notes, extra_json, lifetime_rounds_fired, rounds_fired_since_maintenance, created_at, updated_at
+            "SELECT id, kind, name, manufacturer, model, serial_number, caliber, quantity, purchase_date, purchase_price, notes, extra_json, lifetime_rounds_fired, rounds_fired_since_maintenance, maintenance_every_n_rounds, maintenance_every_n_days, subtype, created_at, updated_at
              FROM assets WHERE id = ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -497,13 +578,16 @@ pub fn create_asset(conn: &Connection, input: AssetInput) -> Result<Asset, Strin
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
     let quantity = input.quantity.unwrap_or(1).max(0);
+    let (maint_r, maint_d) = normalized_maintenance_intervals(&input.kind, &input);
+    let subtype = normalized_subtype(&input.kind, &input.subtype)?;
     let extra = input.extra_json.unwrap_or_else(|| "{}".to_string());
     conn.execute(
         r#"INSERT INTO assets (
             id, kind, name, manufacturer, model, serial_number, caliber, quantity,
             purchase_date, purchase_price, notes, extra_json, lifetime_rounds_fired,
-            rounds_fired_since_maintenance, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, 0, ?13, ?14)"#,
+            rounds_fired_since_maintenance, maintenance_every_n_rounds, maintenance_every_n_days,
+            subtype, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, 0, ?13, ?14, ?15, ?16, ?17)"#,
         params![
             id,
             input.kind,
@@ -517,6 +601,9 @@ pub fn create_asset(conn: &Connection, input: AssetInput) -> Result<Asset, Strin
             input.purchase_price,
             input.notes,
             extra,
+            maint_r,
+            maint_d,
+            subtype,
             now,
             now,
         ],
@@ -531,12 +618,15 @@ pub fn update_asset(conn: &Connection, id: &str, input: AssetInput) -> Result<As
     get_asset(conn, id)?.ok_or_else(|| format!("Asset not found: {id}"))?;
     let now = chrono::Utc::now().to_rfc3339();
     let quantity = input.quantity.unwrap_or(1).max(0);
+    let (maint_r, maint_d) = normalized_maintenance_intervals(&input.kind, &input);
+    let subtype = normalized_subtype(&input.kind, &input.subtype)?;
     let extra = input.extra_json.unwrap_or_else(|| "{}".to_string());
     conn.execute(
         r#"UPDATE assets SET
             kind = ?2, name = ?3, manufacturer = ?4, model = ?5, serial_number = ?6,
             caliber = ?7, quantity = ?8, purchase_date = ?9, purchase_price = ?10,
-            notes = ?11, extra_json = ?12, updated_at = ?13
+            notes = ?11, extra_json = ?12, maintenance_every_n_rounds = ?13,
+            maintenance_every_n_days = ?14, subtype = ?15, updated_at = ?16
         WHERE id = ?1"#,
         params![
             id,
@@ -551,6 +641,9 @@ pub fn update_asset(conn: &Connection, id: &str, input: AssetInput) -> Result<As
             input.purchase_price,
             input.notes,
             extra,
+            maint_r,
+            maint_d,
+            subtype,
             now,
         ],
     )
@@ -576,6 +669,84 @@ fn validate_kind(kind: &str) -> Result<(), String> {
     match kind {
         "firearm" | "part" | "accessory" | "ammunition" => Ok(()),
         _ => Err(format!("Invalid kind: {kind}")),
+    }
+}
+
+/// Positive intervals only; cleared for non-firearm assets.
+fn normalized_maintenance_intervals(kind: &str, input: &AssetInput) -> (Option<i64>, Option<i64>) {
+    if kind != "firearm" {
+        return (None, None);
+    }
+    let r = input.maintenance_every_n_rounds.filter(|&n| n > 0);
+    let d = input.maintenance_every_n_days.filter(|&n| n > 0);
+    (r, d)
+}
+
+fn normalized_subtype(kind: &str, raw: &Option<String>) -> Result<Option<String>, String> {
+    match kind {
+        "firearm" => {
+            const ALLOW: &[&str] = &[
+                "pistol",
+                "semi_auto",
+                "bolt_action",
+                "revolver",
+                "shotgun",
+                "pcc_sub",
+                "other",
+            ];
+            match raw {
+                None => Ok(None),
+                Some(s) => {
+                    let mut t = s.trim().to_lowercase();
+                    if t.is_empty() {
+                        return Ok(None);
+                    }
+                    if t == "rifle" {
+                        t = "bolt_action".to_string();
+                    }
+                    if ALLOW.contains(&t.as_str()) {
+                        Ok(Some(t))
+                    } else {
+                        Err(format!("Invalid firearm subtype: {s}"))
+                    }
+                }
+            }
+        }
+        "accessory" => {
+            const ALLOW: &[&str] = &["scope", "reddot", "holographic", "light", "other"];
+            match raw {
+                None => Ok(None),
+                Some(s) => {
+                    let t = s.trim().to_lowercase();
+                    if t.is_empty() {
+                        return Ok(None);
+                    }
+                    if ALLOW.contains(&t.as_str()) {
+                        Ok(Some(t))
+                    } else {
+                        Err(format!("Invalid accessory subtype: {s}"))
+                    }
+                }
+            }
+        }
+        "ammunition" => {
+            const ALLOW: &[&str] = &["pistol", "rifle", "shotgun", "other"];
+            match raw {
+                None => Ok(None),
+                Some(s) => {
+                    let t = s.trim().to_lowercase();
+                    if t.is_empty() {
+                        return Ok(None);
+                    }
+                    if ALLOW.contains(&t.as_str()) {
+                        Ok(Some(t))
+                    } else {
+                        Err(format!("Invalid ammunition subtype: {s}"))
+                    }
+                }
+            }
+        }
+        _ => Ok(None),
     }
 }
 
@@ -894,11 +1065,9 @@ fn dedupe_asset_ids(asset_ids: Vec<String>) -> Vec<String> {
 fn validate_firearm_assets(conn: &Connection, asset_ids: &[String]) -> Result<(), String> {
     for id in asset_ids {
         let row: Option<(String,)> = conn
-            .query_row(
-                "SELECT kind FROM assets WHERE id = ?1",
-                params![id],
-                |r| Ok((r.get::<_, String>(0)?,)),
-            )
+            .query_row("SELECT kind FROM assets WHERE id = ?1", params![id], |r| {
+                Ok((r.get::<_, String>(0)?,))
+            })
             .optional()
             .map_err(|e| e.to_string())?;
         match row {
@@ -1055,7 +1224,11 @@ fn asset_kind_and_caliber(conn: &Connection, id: &str) -> Result<(String, Option
     .map_err(|_| format!("Asset not found: {id}"))
 }
 
-fn firearm_on_range_day(conn: &Connection, range_day_id: &str, firearm_id: &str) -> Result<bool, String> {
+fn firearm_on_range_day(
+    conn: &Connection,
+    range_day_id: &str,
+    firearm_id: &str,
+) -> Result<bool, String> {
     let n: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM range_day_items WHERE range_day_id = ?1 AND asset_id = ?2",
@@ -1089,9 +1262,8 @@ fn validate_ammo_set_for_firearm(
         if k != "ammunition" {
             return Err("Only ammunition assets can be assigned to a firearm.".into());
         }
-        let cal_key = normalize_caliber_key(&cal_opt).ok_or_else(|| {
-            "Each assigned ammunition asset must have a caliber set.".to_string()
-        })?;
+        let cal_key = normalize_caliber_key(&cal_opt)
+            .ok_or_else(|| "Each assigned ammunition asset must have a caliber set.".to_string())?;
         if let Some(ref u) = unified_cal {
             if *u != cal_key {
                 return Err(
@@ -1116,8 +1288,7 @@ fn validate_ammo_set_for_firearm(
             .map_err(|e| e.to_string())?;
         if other > 0 {
             return Err(
-                "That ammunition is already assigned to another firearm on this range day."
-                    .into(),
+                "That ammunition is already assigned to another firearm on this range day.".into(),
             );
         }
     }
@@ -1167,9 +1338,7 @@ pub fn set_range_day_firearm_ammunition(
     let unique = dedupe_asset_ids(ammunition_asset_ids);
     validate_ammo_set_for_firearm(conn, range_day_id, firearm_asset_id, &unique)?;
     let now = chrono::Utc::now().to_rfc3339();
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     tx.execute(
         "DELETE FROM range_day_firearm_ammo WHERE range_day_id = ?1 AND firearm_asset_id = ?2",
         params![range_day_id, firearm_asset_id],
@@ -1301,9 +1470,7 @@ pub fn create_range_day(
     ensure_planned_no_same_date_conflict(conn, None, &scheduled_date, &unique)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     tx.execute(
         "INSERT INTO range_days (id, scheduled_date, status, notes, completed_at, created_at, updated_at)
          VALUES (?1, ?2, 'planned', NULL, NULL, ?3, ?3)",
@@ -1318,8 +1485,7 @@ pub fn create_range_day(
         .map_err(|e| e.to_string())?;
     }
     tx.commit().map_err(|e| e.to_string())?;
-    get_range_day(conn, &id)?
-        .ok_or_else(|| "Failed to load range day.".to_string())
+    get_range_day(conn, &id)?.ok_or_else(|| "Failed to load range day.".to_string())
 }
 
 pub fn update_range_day_planned(
@@ -1344,16 +1510,9 @@ pub fn update_range_day_planned(
         return Err("Select at least one firearm.".into());
     }
     validate_firearm_assets(conn, &unique)?;
-    ensure_planned_no_same_date_conflict(
-        conn,
-        Some(range_day_id),
-        &scheduled_date,
-        &unique,
-    )?;
+    ensure_planned_no_same_date_conflict(conn, Some(range_day_id), &scheduled_date, &unique)?;
     let now = chrono::Utc::now().to_rfc3339();
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     tx.execute(
         "UPDATE range_days SET scheduled_date = ?2, updated_at = ?3 WHERE id = ?1",
         params![range_day_id, scheduled_date, now],
@@ -1373,8 +1532,7 @@ pub fn update_range_day_planned(
     }
     delete_rdfa_firearms_not_in(&tx, range_day_id, &unique)?;
     tx.commit().map_err(|e| e.to_string())?;
-    get_range_day(conn, range_day_id)?
-        .ok_or_else(|| "Failed to load range day.".to_string())
+    get_range_day(conn, range_day_id)?.ok_or_else(|| "Failed to load range day.".to_string())
 }
 
 pub fn complete_range_day(
@@ -1385,9 +1543,7 @@ pub fn complete_range_day(
     ammo_consumption: Vec<RangeDayAmmoConsumptionEntry>,
 ) -> Result<RangeDayDetail, String> {
     let now = chrono::Utc::now().to_rfc3339();
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let status: String = tx
         .query_row(
             "SELECT status FROM range_days WHERE id = ?1",
@@ -1458,13 +1614,12 @@ pub fn complete_range_day(
             return Err("Ammunition consumption cannot be negative.".into());
         }
         if !item_map.contains_key(&c.firearm_asset_id) {
-            return Err("Ammunition consumption references a firearm not on this range day.".into());
+            return Err(
+                "Ammunition consumption references a firearm not on this range day.".into(),
+            );
         }
         *consumption
-            .entry((
-                c.firearm_asset_id.clone(),
-                c.ammunition_asset_id.clone(),
-            ))
+            .entry((c.firearm_asset_id.clone(), c.ammunition_asset_id.clone()))
             .or_insert(0) += c.rounds;
     }
     for pair in consumption.keys() {
@@ -1569,8 +1724,7 @@ pub fn complete_range_day(
     )
     .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
-    get_range_day(conn, range_day_id)?
-        .ok_or_else(|| "Failed to load range day.".to_string())
+    get_range_day(conn, range_day_id)?.ok_or_else(|| "Failed to load range day.".to_string())
 }
 
 pub fn cancel_range_day(conn: &Connection, range_day_id: &str) -> Result<(), String> {
@@ -1623,9 +1777,7 @@ pub fn add_asset_maintenance(
         .map(|s| s.to_string())
         .unwrap_or_else(|| now.clone());
     let id = uuid::Uuid::new_v4().to_string();
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     tx.execute(
         "INSERT INTO asset_maintenance (id, asset_id, performed_at, notes, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![id, asset_id, perf, notes, now],
@@ -1675,6 +1827,305 @@ pub fn list_asset_maintenance(
     Ok(out)
 }
 
+// --- Dashboard ---
+
+const DASHBOARD_TOP_FIREARMS: i64 = 8;
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardAmmoCaliberRow {
+    pub caliber: String,
+    pub rounds: i64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardUpcomingMaintenanceRow {
+    pub asset_id: String,
+    pub name: String,
+    pub summary: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardTopFirearmRow {
+    pub asset_id: String,
+    pub name: String,
+    pub lifetime_rounds_fired: i64,
+    pub completed_range_day_count: i64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardStats {
+    pub ammo_by_caliber: Vec<DashboardAmmoCaliberRow>,
+    pub upcoming_maintenance: Vec<DashboardUpcomingMaintenanceRow>,
+    pub top_firearms: Vec<DashboardTopFirearmRow>,
+}
+
+fn parse_date_anchor(s: &str) -> Option<chrono::NaiveDate> {
+    let s = s.trim();
+    if s.len() >= 10 {
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(&s[..10], "%Y-%m-%d") {
+            return Some(d);
+        }
+    }
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|d| d.date_naive())
+}
+
+/// Next calendar maintenance due date: anchor (last maintenance date, else purchase, else created) + interval days.
+fn maintenance_anchor_date(
+    conn: &Connection,
+    asset_id: &str,
+    purchase_date: &Option<String>,
+    created_at: &str,
+) -> Result<Option<chrono::NaiveDate>, String> {
+    let last: Option<String> = conn
+        .query_row(
+            "SELECT performed_at FROM asset_maintenance WHERE asset_id = ?1 ORDER BY performed_at DESC, created_at DESC LIMIT 1",
+            params![asset_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if let Some(ref s) = last {
+        if let Some(d) = parse_date_anchor(s) {
+            return Ok(Some(d));
+        }
+    }
+    if let Some(ref pd) = purchase_date {
+        if let Some(d) = parse_date_anchor(pd) {
+            return Ok(Some(d));
+        }
+    }
+    Ok(parse_date_anchor(created_at))
+}
+
+fn rounds_maintenance_matches(s: i64, t: i64) -> bool {
+    if t <= 0 {
+        return false;
+    }
+    let threshold = ((t as f64) * 0.9).floor() as i64;
+    s >= threshold
+}
+
+fn days_maintenance_matches(days_left: i64, interval: i64) -> bool {
+    if interval <= 0 {
+        return false;
+    }
+    if days_left < 0 {
+        return true;
+    }
+    let window = ((interval as f64) * 0.1).ceil() as i64;
+    days_left <= window
+}
+
+fn build_maintenance_summary(
+    s: i64,
+    t_r: Option<i64>,
+    t_d: Option<i64>,
+    days_left: Option<i64>,
+    round_hit: bool,
+    day_hit: bool,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if round_hit {
+        if let Some(t) = t_r {
+            parts.push(format!("{s} / {t} rounds since maintenance"));
+        }
+    }
+    if day_hit {
+        if let (Some(dleft), Some(iv)) = (days_left, t_d) {
+            if dleft < 0 {
+                parts.push(format!(
+                    "Scheduled maintenance overdue by {} day(s)",
+                    -dleft
+                ));
+            } else if dleft == 0 {
+                parts.push("Scheduled maintenance due today".to_string());
+            } else {
+                parts.push(format!(
+                    "Scheduled maintenance in {dleft} day(s) (every {iv} days)"
+                ));
+            }
+        }
+    }
+    parts.join("; ")
+}
+
+#[derive(Clone)]
+struct MaintSortable {
+    row: DashboardUpcomingMaintenanceRow,
+    rank: u8,
+    days_left_key: i64,
+    round_pressure: i64,
+}
+
+pub fn get_dashboard_stats(conn: &Connection) -> Result<DashboardStats, String> {
+    let ammo_by_caliber = dashboard_ammo_by_caliber(conn)?;
+    let top_firearms = dashboard_top_firearms(conn, DASHBOARD_TOP_FIREARMS)?;
+    let upcoming_maintenance = dashboard_upcoming_maintenance(conn)?;
+    Ok(DashboardStats {
+        ammo_by_caliber,
+        upcoming_maintenance,
+        top_firearms,
+    })
+}
+
+fn dashboard_ammo_by_caliber(conn: &Connection) -> Result<Vec<DashboardAmmoCaliberRow>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"SELECT
+                 CASE WHEN TRIM(COALESCE(caliber, '')) = '' THEN 'Unknown' ELSE TRIM(caliber) END,
+                 SUM(quantity)
+               FROM assets
+               WHERE kind = 'ammunition'
+               GROUP BY 1
+               HAVING SUM(quantity) > 0
+               ORDER BY SUM(quantity) DESC"#,
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(DashboardAmmoCaliberRow {
+                caliber: row.get(0)?,
+                rounds: row.get(1)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+fn dashboard_top_firearms(
+    conn: &Connection,
+    limit: i64,
+) -> Result<Vec<DashboardTopFirearmRow>, String> {
+    let sql = format!(
+        r#"SELECT a.id, a.name, a.lifetime_rounds_fired,
+            COALESCE((
+              SELECT COUNT(DISTINCT rdi.range_day_id)
+              FROM range_day_items rdi
+              INNER JOIN range_days rd ON rd.id = rdi.range_day_id
+              WHERE rdi.asset_id = a.id AND rd.status = 'completed'
+            ), 0) AS day_count
+           FROM assets a
+           WHERE a.kind = 'firearm'
+           ORDER BY a.lifetime_rounds_fired DESC, day_count DESC, a.name COLLATE NOCASE
+           LIMIT {limit}"#
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(DashboardTopFirearmRow {
+                asset_id: row.get(0)?,
+                name: row.get(1)?,
+                lifetime_rounds_fired: row.get(2)?,
+                completed_range_day_count: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+fn dashboard_upcoming_maintenance(
+    conn: &Connection,
+) -> Result<Vec<DashboardUpcomingMaintenanceRow>, String> {
+    let today = chrono::Utc::now().date_naive();
+    let mut stmt = conn
+        .prepare(
+            r#"SELECT id, name, rounds_fired_since_maintenance,
+                 maintenance_every_n_rounds, maintenance_every_n_days,
+                 purchase_date, created_at
+               FROM assets
+               WHERE kind = 'firearm'
+                 AND (maintenance_every_n_rounds IS NOT NULL OR maintenance_every_n_days IS NOT NULL)"#,
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Option<i64>>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, String>(6)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut sortable: Vec<MaintSortable> = Vec::new();
+    for r in rows {
+        let (id, name, s, t_r, t_d, purchase_date, created_at) = r.map_err(|e| e.to_string())?;
+        let anchor = maintenance_anchor_date(conn, &id, &purchase_date, &created_at)?;
+        let days_left = match (t_d, anchor) {
+            (Some(iv), Some(ad)) if iv > 0 => {
+                let next = ad + chrono::Duration::days(iv);
+                Some((next - today).num_days())
+            }
+            _ => None,
+        };
+
+        let round_hit = t_r.is_some_and(|t| rounds_maintenance_matches(s, t));
+        let day_hit = match (days_left, t_d) {
+            (Some(dl), Some(iv)) => days_maintenance_matches(dl, iv),
+            _ => false,
+        };
+        if !round_hit && !day_hit {
+            continue;
+        }
+
+        let summary = build_maintenance_summary(s, t_r, t_d, days_left, round_hit, day_hit);
+        let row = DashboardUpcomingMaintenanceRow {
+            asset_id: id.clone(),
+            name: name.clone(),
+            summary,
+        };
+
+        let round_over = t_r.is_some_and(|t| t > 0 && s >= t);
+        let rank: u8 = if day_hit && days_left.is_some_and(|d| d < 0) {
+            0
+        } else if round_over {
+            1
+        } else if day_hit {
+            2
+        } else {
+            3
+        };
+
+        let days_left_key = days_left.unwrap_or(i64::MAX);
+        let round_pressure = t_r.map(|t| (s * 1000 / t.max(1)).min(10_000)).unwrap_or(0);
+
+        sortable.push(MaintSortable {
+            row,
+            rank,
+            days_left_key,
+            round_pressure,
+        });
+    }
+
+    sortable.sort_by(|a, b| {
+        a.rank
+            .cmp(&b.rank)
+            .then_with(|| a.days_left_key.cmp(&b.days_left_key))
+            .then_with(|| b.round_pressure.cmp(&a.round_pressure))
+            .then_with(|| a.row.name.cmp(&b.row.name))
+    });
+
+    Ok(sortable.into_iter().map(|m| m.row).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1703,6 +2154,9 @@ mod tests {
             purchase_price: Some(1.0),
             notes: Some("note".into()),
             extra_json: Some("{}".into()),
+            maintenance_every_n_rounds: None,
+            maintenance_every_n_days: None,
+            subtype: None,
             tags: None,
         }
     }
@@ -1935,13 +2389,7 @@ mod tests {
         let (_d, conn, _img) = setup();
         let g = create_asset(&conn, sample_input("firearm", "G")).unwrap();
         let day = create_range_day(&conn, "2030-03-01".into(), vec![g.id.clone()]).unwrap();
-        update_range_day_planned(
-            &conn,
-            &day.id,
-            "2030-03-01".into(),
-            vec![g.id.clone()],
-        )
-        .unwrap();
+        update_range_day_planned(&conn, &day.id, "2030-03-01".into(), vec![g.id.clone()]).unwrap();
     }
 
     #[test]
@@ -2011,13 +2459,8 @@ mod tests {
         am2.quantity = Some(50);
         let m2 = create_asset(&conn, am2).unwrap();
         let day = create_range_day(&conn, "2031-02-01".into(), vec![g.id.clone()]).unwrap();
-        set_range_day_firearm_ammunition(
-            &conn,
-            &day.id,
-            &g.id,
-            vec![m1.id.clone(), m2.id.clone()],
-        )
-        .unwrap();
+        set_range_day_firearm_ammunition(&conn, &day.id, &g.id, vec![m1.id.clone(), m2.id.clone()])
+            .unwrap();
         complete_range_day(
             &conn,
             &day.id,
@@ -2044,5 +2487,109 @@ mod tests {
         let q2 = get_asset(&conn, &m2.id).unwrap().unwrap().quantity;
         assert_eq!(q1, 90);
         assert_eq!(q2, 30);
+    }
+
+    #[test]
+    fn dashboard_ammo_by_caliber_sums_quantity() {
+        let (_d, conn, _img) = setup();
+        let mut a1 = sample_input("ammunition", "B1");
+        a1.caliber = Some("9mm".into());
+        a1.quantity = Some(100);
+        create_asset(&conn, a1).unwrap();
+        let mut a2 = sample_input("ammunition", "B2");
+        a2.caliber = Some("9mm".into());
+        a2.quantity = Some(50);
+        create_asset(&conn, a2).unwrap();
+        let mut a3 = sample_input("ammunition", "B3");
+        a3.caliber = Some(".223 Rem".into());
+        a3.quantity = Some(20);
+        create_asset(&conn, a3).unwrap();
+        let stats = get_dashboard_stats(&conn).unwrap();
+        let nine: i64 = stats
+            .ammo_by_caliber
+            .iter()
+            .find(|r| r.caliber == "9mm")
+            .map(|r| r.rounds)
+            .unwrap_or(0);
+        assert_eq!(nine, 150);
+    }
+
+    #[test]
+    fn dashboard_upcoming_lists_firearm_near_round_threshold() {
+        let (_d, conn, _img) = setup();
+        let mut gun = sample_input("firearm", "G");
+        gun.maintenance_every_n_rounds = Some(100);
+        let g = create_asset(&conn, gun).unwrap();
+        conn.execute(
+            "UPDATE assets SET rounds_fired_since_maintenance = 95 WHERE id = ?1",
+            params![g.id],
+        )
+        .unwrap();
+        let stats = get_dashboard_stats(&conn).unwrap();
+        assert_eq!(stats.upcoming_maintenance.len(), 1);
+        assert_eq!(stats.upcoming_maintenance[0].asset_id, g.id);
+        assert!(stats.upcoming_maintenance[0].summary.contains("95"));
+    }
+
+    #[test]
+    fn dashboard_top_firearms_orders_by_lifetime_rounds() {
+        let (_d, conn, _img) = setup();
+        let g1 = create_asset(&conn, sample_input("firearm", "A")).unwrap();
+        let g2 = create_asset(&conn, sample_input("firearm", "B")).unwrap();
+        conn.execute(
+            "UPDATE assets SET lifetime_rounds_fired = 200 WHERE id = ?1",
+            params![g2.id],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE assets SET lifetime_rounds_fired = 50 WHERE id = ?1",
+            params![g1.id],
+        )
+        .unwrap();
+        let stats = get_dashboard_stats(&conn).unwrap();
+        assert!(stats.top_firearms.len() >= 2);
+        assert_eq!(stats.top_firearms[0].name, "B");
+        assert_eq!(stats.top_firearms[0].lifetime_rounds_fired, 200);
+    }
+
+    #[test]
+    fn asset_subtype_firearm_and_accessory() {
+        let (_d, conn, _img) = setup();
+        let mut inp = sample_input("firearm", "F");
+        inp.subtype = Some("revolver".into());
+        let a = create_asset(&conn, inp).unwrap();
+        assert_eq!(a.subtype.as_deref(), Some("revolver"));
+
+        let mut bad = sample_input("firearm", "F2");
+        bad.subtype = Some("scope".into());
+        assert!(create_asset(&conn, bad).is_err());
+
+        let mut pcc = sample_input("firearm", "F3");
+        pcc.subtype = Some("pcc_sub".into());
+        let p = create_asset(&conn, pcc).unwrap();
+        assert_eq!(p.subtype.as_deref(), Some("pcc_sub"));
+
+        let mut acc = sample_input("accessory", "A");
+        acc.subtype = Some("reddot".into());
+        let b = create_asset(&conn, acc).unwrap();
+        assert_eq!(b.subtype.as_deref(), Some("reddot"));
+
+        let mut ammo = sample_input("ammunition", "Ammo");
+        ammo.subtype = Some("shotgun".into());
+        let c = create_asset(&conn, ammo).unwrap();
+        assert_eq!(c.subtype.as_deref(), Some("shotgun"));
+
+        let mut bad_ammo = sample_input("ammunition", "Ammo2");
+        bad_ammo.subtype = Some("scope".into());
+        assert!(create_asset(&conn, bad_ammo).is_err());
+    }
+
+    #[test]
+    fn asset_subtype_cleared_for_part_even_if_sent() {
+        let (_d, conn, _img) = setup();
+        let mut inp = sample_input("part", "P");
+        inp.subtype = Some("pistol".into());
+        let a = create_asset(&conn, inp).unwrap();
+        assert_eq!(a.subtype, None);
     }
 }

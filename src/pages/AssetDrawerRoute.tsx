@@ -14,6 +14,7 @@ import type {
   ImagePayload,
 } from "../types";
 import { invoke } from "../tauri";
+import { AssetKindIcon } from "../components/AssetKindIcon";
 import { AssetForm } from "../components/AssetForm";
 import { ConfirmModal } from "../components/ConfirmModal";
 import {
@@ -23,6 +24,22 @@ import {
 } from "../lib/assetDefaults";
 import { useAssetsList } from "../context/AssetsListContext";
 import { useToast } from "../context/ToastContext";
+import aowDetailedSvgUrl from "../icons/aow_detailed.svg?url";
+import ar15DetailedSvgUrl from "../icons/AR15_detailed.svg?url";
+import boltrifleDetailedSvgUrl from "../icons/boltrifle_detailed.svg?url";
+import subDetailedSvgUrl from "../icons/sub_detailed.svg?url";
+
+/** Large drawer watermark for firearms that have a matching detailed SVG. */
+function firearmDrawerDetailedBackgroundUrl(
+  subtype: string | null | undefined,
+): string | null {
+  const s = (subtype ?? "").toLowerCase().trim();
+  if (s === "semi_auto") return ar15DetailedSvgUrl;
+  if (s === "bolt_action" || s === "rifle") return boltrifleDetailedSvgUrl;
+  if (s === "pcc_sub") return subDetailedSvgUrl;
+  if (s === "other") return aowDetailedSvgUrl;
+  return null;
+}
 
 export function AssetDrawerRoute() {
   const matchNew = useMatch({ path: "/assets/new", end: true });
@@ -132,6 +149,11 @@ export function AssetDrawerRoute() {
   }, [isNew, assetId, pushToast]);
 
   const selected = editing;
+  const drawerFirearmArtUrl =
+    selected?.kind === "firearm"
+      ? firearmDrawerDetailedBackgroundUrl(selected.subtype)
+      : null;
+  const showFirearmDrawerArt = drawerFirearmArtUrl != null;
 
   useEffect(() => {
     if (!selectedId || isNew) {
@@ -234,6 +256,10 @@ export function AssetDrawerRoute() {
       purchaseDate: selected.purchaseDate?.trim() || null,
       notes: selected.notes?.trim() || null,
       extraJson: extra,
+      subtype:
+        selected.kind === "firearm" || selected.kind === "accessory"
+          ? selected.subtype?.trim() || null
+          : null,
       tags: normalizeTagsForSave(selected.tags),
     };
     try {
@@ -376,7 +402,14 @@ export function AssetDrawerRoute() {
           onClick={close}
         />
         <aside className="drawer-panel" role="dialog" aria-modal="true">
-          <div className="drawer-head">
+          <div className="drawer-head drawer-head--with-asset-icon">
+            <span className="drawer-head-asset-icon" aria-hidden>
+              <AssetKindIcon
+                asset={{ kind: "firearm", subtype: "other" }}
+                size={34}
+                className="drawer-asset-silhouette"
+              />
+            </span>
             <h2 className="drawer-title">Asset</h2>
             <button
               type="button"
@@ -410,7 +443,17 @@ export function AssetDrawerRoute() {
         onClick={close}
       />
       <aside className="drawer-panel" role="dialog" aria-modal="true">
-        <div className="drawer-head">
+        <div className="drawer-head drawer-head--with-asset-icon">
+          <span className="drawer-head-asset-icon" aria-hidden>
+            <AssetKindIcon
+              asset={{
+                kind: selected.kind,
+                subtype: selected.subtype ?? null,
+              }}
+              size={34}
+              className="drawer-asset-silhouette"
+            />
+          </span>
           <h2 className="drawer-title">
             {isNew ? "New asset" : "Edit asset"}
           </h2>
@@ -423,7 +466,22 @@ export function AssetDrawerRoute() {
             ×
           </button>
         </div>
-        <div className="drawer-body">
+        <div
+          className={
+            showFirearmDrawerArt
+              ? "drawer-body drawer-body--firearm-art"
+              : "drawer-body"
+          }
+        >
+          {showFirearmDrawerArt ? (
+            <div
+              className="drawer-body-firearm-art"
+              aria-hidden
+              style={{
+                backgroundImage: `url(${drawerFirearmArtUrl})`,
+              }}
+            />
+          ) : null}
           <AssetForm
             editing={selected}
             setEditing={(next) => {
@@ -460,6 +518,11 @@ export function AssetDrawerRoute() {
                       loadedAsset.roundsFiredSinceMaintenance,
                   }
                 : null
+            }
+            serverSyncKey={
+              !isNew && loadedAsset && loadedAsset.id === selectedId
+                ? loadedAsset.updatedAt
+                : ""
             }
           />
           {!isNew && selectedId && selected.kind === "firearm" ? (

@@ -376,7 +376,9 @@ pub fn create_range_day(
     asset_ids: Vec<String>,
     paths: State<AppPaths>,
 ) -> Result<RangeDayDetail, String> {
-    with_conn(&paths, |c| db::create_range_day(c, scheduled_date, asset_ids))
+    with_conn(&paths, |c| {
+        db::create_range_day(c, scheduled_date, asset_ids)
+    })
 }
 
 #[tauri::command]
@@ -386,7 +388,9 @@ pub fn update_range_day_planned(
     asset_ids: Vec<String>,
     paths: State<AppPaths>,
 ) -> Result<RangeDayDetail, String> {
-    with_conn(&paths, |c| db::update_range_day_planned(c, &id, scheduled_date, asset_ids))
+    with_conn(&paths, |c| {
+        db::update_range_day_planned(c, &id, scheduled_date, asset_ids)
+    })
 }
 
 #[tauri::command]
@@ -431,7 +435,9 @@ pub fn add_asset_maintenance(
     notes: Option<String>,
     paths: State<AppPaths>,
 ) -> Result<AssetMaintenance, String> {
-    with_conn(&paths, |c| db::add_asset_maintenance(c, &asset_id, performed_at, notes))
+    with_conn(&paths, |c| {
+        db::add_asset_maintenance(c, &asset_id, performed_at, notes)
+    })
 }
 
 #[tauri::command]
@@ -440,6 +446,11 @@ pub fn list_asset_maintenance(
     paths: State<AppPaths>,
 ) -> Result<Vec<AssetMaintenance>, String> {
     with_conn(&paths, |c| db::list_asset_maintenance(c, &asset_id))
+}
+
+#[tauri::command]
+pub fn get_dashboard_stats(paths: State<AppPaths>) -> Result<db::DashboardStats, String> {
+    with_conn(&paths, db::get_dashboard_stats)
 }
 
 #[cfg(test)]
@@ -478,6 +489,9 @@ mod tests {
             purchase_price: None,
             notes: None,
             extra_json: Some("{}".into()),
+            maintenance_every_n_rounds: None,
+            maintenance_every_n_days: None,
+            subtype: None,
             tags: None,
         }
     }
@@ -656,6 +670,6 @@ mod tests {
         assert_eq!(exec_list_assets(&paths, None, None).unwrap().len(), 1);
         exec_dev_drop_and_reseed(&paths).unwrap();
         let all = exec_list_assets(&paths, None, None).unwrap();
-        assert_eq!(all.len(), 8);
+        assert_eq!(all.len(), 16);
     }
 }
