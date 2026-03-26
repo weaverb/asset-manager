@@ -59,6 +59,8 @@ Pull requests to `main` run **[CI](https://github.com/weaverb/asset-manager/acti
 
 Pushes to `main` run **[Release](https://github.com/weaverb/asset-manager/actions/workflows/release.yml)**: the same checks, then [release-please](https://github.com/googleapis/release-please) opens or updates a **release pull request** when there are releasable [Conventional Commits](https://www.conventionalcommits.org/). Merging that PR triggers a **GitHub Release** tagged `vX.Y.Z` and uploads **macOS**, **Linux**, and **Windows** installers built with [tauri-action](https://github.com/tauri-apps/tauri-action). Human-readable changes accumulate in [`CHANGELOG.md`](CHANGELOG.md).
 
+After a corrective `fix` lands on `main` (for example to repair release automation), **merge the next release-please PR** (often a patch like **v0.2.1**) so new installers are built with the correct embedded version.
+
 The repository needs **Settings → Actions → General → Workflow permissions → Read and write** for the default `GITHUB_TOKEN` so those workflows can manage pull requests and release assets.
 
 ### Development sample data (debug builds)
