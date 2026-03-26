@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          rustflags: ""
+          rust-src-dir: src-tauri
+
+      - name: Install cargo-llvm-cov
+        run: |
+          rustup component add llvm-tools-preview --toolchain stable
+          cargo install cargo-llvm-cov --locked
+
+      - run: npm run build
+      - run: npm run test:rust
+      - run: npm run fmt:rust:check
+      - run: npm run lint:rust
+      - run: npm run test:rust:coverage

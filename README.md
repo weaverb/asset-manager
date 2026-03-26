@@ -53,6 +53,14 @@ From the repository root (`asset-manager/`):
 | `npm run test:rust` | Run **Rust unit tests** for the Tauri crate (`src-tauri`). |
 | `npm run test:rust:coverage` | Generate a **line-coverage** report for those tests (see [Backend tests and coverage](#backend-tests-and-coverage)). |
 
+### CI and releases (GitHub)
+
+Pull requests to `main` run **[CI](https://github.com/weaverb/asset-manager/actions/workflows/ci.yml)** (`npm run build`, Rust tests, formatting, Clippy, and coverage).
+
+Pushes to `main` run **[Release](https://github.com/weaverb/asset-manager/actions/workflows/release.yml)**: the same checks, then [release-please](https://github.com/googleapis/release-please) opens or updates a **release pull request** when there are releasable [Conventional Commits](https://www.conventionalcommits.org/). Merging that PR triggers a **GitHub Release** tagged `vX.Y.Z` and uploads **macOS**, **Linux**, and **Windows** installers built with [tauri-action](https://github.com/tauri-apps/tauri-action). Human-readable changes accumulate in [`CHANGELOG.md`](CHANGELOG.md).
+
+The repository needs **Settings → Actions → General → Workflow permissions → Read and write** for the default `GITHUB_TOKEN` so those workflows can manage pull requests and release assets.
+
 ### Development sample data (debug builds)
 
 On **`npm run tauri dev`** (debug builds only), the app may **seed the database once** with a richer sample set: **six** firearms (mixed calibers and maintenance settings), **six** ammunition rows (at least one per firearm caliber), two parts, and two accessories, plus a few **completed** range days for usage stats. Whether seeding has already run is stored in SQLite (`app_settings` key `dev_inventory_seeded`), so **later dev sessions do not insert duplicates**.

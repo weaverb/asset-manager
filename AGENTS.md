@@ -29,6 +29,8 @@ npm install
 | `npm run fmt:rust:check` | Fail if Rust code is not formatted (CI / pre-merge). |
 | `npm run lint:rust` | `clippy` on all targets with `-D warnings`. |
 
+**CI:** GitHub Actions runs the build, Rust tests, `fmt:rust:check`, `lint:rust`, and `test:rust:coverage` on pull requests to `main` (see `.github/workflows/ci.yml`).
+
 **Rust quality (recommended before merging backend-heavy changes):** run `npm run fmt:rust:check` and `npm run lint:rust` (or `npm run fmt:rust` to auto-fix formatting).
 
 There is no ESLint config today; frontend quality is enforced by **TypeScript strict** (`tsconfig.json`) and **`tsc`** as part of `npm run build`.
@@ -79,11 +81,12 @@ Use **[Conventional Commits](https://www.conventionalcommits.org/)** for all com
 
 This project follows **[Semantic Versioning 2.0.0](https://semver.org/)** (`MAJOR.MINOR.PATCH`).
 
-**Version must stay in sync** in three places before tagging or shipping a release build:
+**Version must stay in sync** in four places before tagging or shipping a release build:
 
 1. `package.json` → `"version"`
 2. `src-tauri/Cargo.toml` → `[package] version`
 3. `src-tauri/tauri.conf.json` → `"version"`
+4. `src-tauri/Cargo.lock` → `[[package]] name = "asset-manager"` → `version` (must match the crate version in `Cargo.toml` when using `--locked` builds)
 
 Tauri’s release flow reads these consistently; drifting versions cause confusing bundles or updater metadata.
 
@@ -95,14 +98,21 @@ Tauri’s release flow reads these consistently; drifting versions cause confusi
 | New user-visible features, backward-compatible | **MINOR** |
 | Breaking app behavior, incompatible on-disk format, or removed/changed public IPC contract | **MAJOR** |
 
-**Release checklist (manual until CI exists):**
+**Automated releases (GitHub Actions):**
 
-1. Update the three version fields above to the same value.
-2. Run `npm run build`, `npm run test:rust`, and (if Rust changed) `npm run test:rust:coverage`, `npm run fmt:rust:check`, and `npm run lint:rust`.
+- **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests to `main`: `npm run build`, Rust tests, `fmt:rust:check`, `lint:rust`, and `test:rust:coverage` (Ubuntu runner).
+- **[`.github/workflows/release.yml`](.github/workflows/release.yml)** — on every push to `main`: runs the same checks, then [release-please](https://github.com/googleapis/release-please) (manifest in [`release-please-config.json`](release-please-config.json) / [`.release-please-manifest.json`](.release-please-manifest.json)) opens or updates a **release PR** from Conventional Commits. When that PR is merged, the next push creates a **GitHub Release** (`vX.Y.Z`) and builds **macOS** (Apple Silicon + Intel), **Linux** (x64 `.deb` / `.AppImage` per Tauri defaults), and **Windows** installers via [`tauri-apps/tauri-action`](https://github.com/tauri-apps/tauri-action), attaching artifacts to that release.
+
+**Maintainer flow:** merge feature work to `main` with Conventional Commits → merge the **release-please** release PR when you want to ship → installers appear on the GitHub Release for the new tag.
+
+**Repository settings:** under **Settings → Actions → General → Workflow permissions**, enable **Read and write** for the `GITHUB_TOKEN` so release-please and tauri-action can open PRs and upload release assets.
+
+**Emergency manual release checklist** (if automation is bypassed):
+
+1. Bump all four version locations above to the same value (including `Cargo.lock` for the `asset-manager` package, e.g. `cargo build --manifest-path src-tauri/Cargo.toml` after editing `Cargo.toml`).
+2. Run `npm run build`, `npm run test:rust`, `npm run test:rust:coverage`, `npm run fmt:rust:check`, and `npm run lint:rust`.
 3. Run `npm run tauri build` on each target platform you ship.
-4. Tag Git: `vX.Y.Z` (leading `v` is a common convention; stay consistent with any future automation).
-
-**Future automation (optional):** tools such as [release-please](https://github.com/googleapis/release-please) or [semantic-release](https://semantic-release.gitbook.io/) pair well with Conventional Commits to propose version bumps and changelogs; for Tauri you still need a step that updates **all three** version locations (or a small script) before building artifacts.
+4. Tag Git: `vX.Y.Z` (leading `v` matches release-please defaults in this repo).
 
 ## Agent-specific notes
 
