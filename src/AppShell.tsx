@@ -1,3 +1,4 @@
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -6,7 +7,11 @@ import { ConfirmModal } from "./components/ConfirmModal";
 import { SilhouetteSvgBrowserModal } from "./components/SilhouetteSvgBrowserModal";
 import { AssetsListProvider, useAssetsList } from "./context/AssetsListContext";
 import { ToastProvider, useToast } from "./context/ToastContext";
-import type { AppSettings } from "./types";
+import type {
+  AppSettings,
+  BackupFileKindDto,
+  ExportBackupInvokeResult,
+} from "./types";
 import { invoke } from "./tauri";
 
 function GearIcon() {
@@ -33,7 +38,7 @@ function AppShellInner() {
   const navigate = useNavigate();
   const onAssets = location.pathname.startsWith("/assets");
   const onRangeDays = location.pathname.startsWith("/range-days");
-  const { query, setQuery } = useAssetsList();
+  const { query, setQuery, refreshList } = useAssetsList();
   const { pushToast } = useToast();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -41,10 +46,33 @@ function AppShellInner() {
   const [devReseedConfirmOpen, setDevReseedConfirmOpen] = useState(false);
   const [svgBrowserOpen, setSvgBrowserOpen] = useState(false);
 
+  const [backupEncrypt, setBackupEncrypt] = useState(false);
+  const [backupWordCount, setBackupWordCount] = useState<12 | 24>(12);
+  const [backupPassphrase, setBackupPassphrase] = useState("");
+  const [backupPassphraseConfirm, setBackupPassphraseConfirm] = useState("");
+  const [mnemonicReveal, setMnemonicReveal] = useState<string | null>(null);
+
+  const [importFilePath, setImportFilePath] = useState<string | null>(null);
+  const [importFileKind, setImportFileKind] =
+    useState<BackupFileKindDto | null>(null);
+  const [importMnemonic, setImportMnemonic] = useState("");
+  const [importPassphrase, setImportPassphrase] = useState("");
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+
   useEffect(() => {
     if (!settingsOpen) {
       setDevReseedConfirmOpen(false);
       setSvgBrowserOpen(false);
+      setBackupEncrypt(false);
+      setBackupWordCount(12);
+      setBackupPassphrase("");
+      setBackupPassphraseConfirm("");
+      setMnemonicReveal(null);
+      setImportFilePath(null);
+      setImportFileKind(null);
+      setImportMnemonic("");
+      setImportPassphrase("");
+      setImportConfirmOpen(false);
     }
   }, [settingsOpen]);
 
@@ -65,6 +93,113 @@ function AppShellInner() {
       });
       setSettingsOpen(false);
       pushToast("Settings saved.", "success");
+    } catch (e) {
+      pushToast(String(e), "error");
+    }
+  };
+
+  const runExportBackup = async () => {
+    if (backupEncrypt) {
+      if (backupPassphrase !== backupPassphraseConfirm) {
+        pushToast("Optional passphrases do not match.", "error");
+        return;
+      }
+    }
+    const defaultPath = backupEncrypt
+      ? "asset-manager-backup.ambak"
+      : "asset-manager-backup.zip";
+    let path: string | null;
+    try {
+      path = await save({
+        defaultPath,
+        filters: [
+          { name: "ZIP archive", extensions: ["zip"] },
+          { name: "Encrypted backup", extensions: ["ambak"] },
+        ],
+      });
+    } catch (e) {
+      pushToast(String(e), "error");
+      return;
+    }
+    if (path === null) return;
+    try {
+      const result = await invoke<ExportBackupInvokeResult>("export_backup", {
+        path,
+        encrypt: backupEncrypt,
+        wordCount: backupWordCount,
+        passphrase: backupEncrypt ? backupPassphrase : null,
+      });
+      pushToast("Backup saved.", "success");
+      setBackupPassphrase("");
+      setBackupPassphraseConfirm("");
+      if (result.mnemonic) {
+        setMnemonicReveal(result.mnemonic);
+      }
+    } catch (e) {
+      pushToast(String(e), "error");
+    }
+  };
+
+  const pickImportBackup = async () => {
+    let path: string | string[] | null;
+    try {
+      path = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Backup",
+            extensions: ["zip", "ambak"],
+          },
+        ],
+      });
+    } catch (e) {
+      pushToast(String(e), "error");
+      return;
+    }
+    if (path === null) return;
+    const selected = Array.isArray(path) ? (path[0] ?? null) : path;
+    if (!selected) return;
+    try {
+      const inspected = await invoke<{ kind: BackupFileKindDto }>(
+        "inspect_backup_file",
+        { path: selected },
+      );
+      setImportFilePath(selected);
+      setImportFileKind(inspected.kind);
+      setImportMnemonic("");
+      setImportPassphrase("");
+    } catch (e) {
+      pushToast(String(e), "error");
+    }
+  };
+
+  const runImportBackup = async () => {
+    if (!importFilePath) return;
+    if (importFileKind === "ambak" && importMnemonic.trim() === "") {
+      pushToast(
+        "This backup is encrypted. Enter the recovery phrase.",
+        "error",
+      );
+      return;
+    }
+    if (importFileKind === "unknown") {
+      pushToast("Could not read that file as a backup.", "error");
+      return;
+    }
+    try {
+      await invoke("import_backup", {
+        path: importFilePath,
+        mnemonic:
+          importMnemonic.trim() === "" ? null : importMnemonic.trim(),
+        passphrase: importPassphrase,
+      });
+      setImportConfirmOpen(false);
+      setImportFilePath(null);
+      setImportFileKind(null);
+      setImportMnemonic("");
+      setImportPassphrase("");
+      await refreshList();
+      pushToast("Backup restored. Your inventory was replaced.", "success");
     } catch (e) {
       pushToast(String(e), "error");
     }
@@ -192,6 +327,136 @@ function AppShellInner() {
                     spellCheck={false}
                   />
                 </label>
+
+                <div className="modal-field settings-backup-section">
+                  <h3 className="settings-section-title">Backup</h3>
+                  <p className="modal-lead settings-backup-lead">
+                    Export a ZIP of your database and photos, or an encrypted
+                    file protected by a recovery phrase. Importing a backup
+                    replaces all inventory and images on this device.
+                  </p>
+                  <label className="settings-backup-check">
+                    <input
+                      type="checkbox"
+                      checked={backupEncrypt}
+                      onChange={(e) => setBackupEncrypt(e.target.checked)}
+                    />{" "}
+                    Encrypt backup (recovery phrase shown once after export)
+                  </label>
+                  {backupEncrypt ? (
+                    <>
+                      <fieldset className="settings-backup-words">
+                        <legend className="settings-backup-legend">
+                          Recovery phrase length
+                        </legend>
+                        <label className="settings-backup-radio">
+                          <input
+                            type="radio"
+                            name="backupWordCount"
+                            checked={backupWordCount === 12}
+                            onChange={() => setBackupWordCount(12)}
+                          />{" "}
+                          12 words
+                        </label>
+                        <label className="settings-backup-radio">
+                          <input
+                            type="radio"
+                            name="backupWordCount"
+                            checked={backupWordCount === 24}
+                            onChange={() => setBackupWordCount(24)}
+                          />{" "}
+                          24 words
+                        </label>
+                      </fieldset>
+                      <label className="modal-field">
+                        Optional passphrase (BIP39, separate from the word list)
+                        <input
+                          type="password"
+                          value={backupPassphrase}
+                          onChange={(e) => setBackupPassphrase(e.target.value)}
+                          placeholder="Leave blank if not used"
+                          autoComplete="new-password"
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label className="modal-field">
+                        Confirm passphrase
+                        <input
+                          type="password"
+                          value={backupPassphraseConfirm}
+                          onChange={(e) =>
+                            setBackupPassphraseConfirm(e.target.value)
+                          }
+                          placeholder="Same as above"
+                          autoComplete="new-password"
+                          spellCheck={false}
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                  <div className="settings-backup-actions">
+                    <button
+                      type="button"
+                      className="primary ghost"
+                      onClick={() => void runExportBackup()}
+                    >
+                      Export backup…
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void pickImportBackup()}
+                    >
+                      Choose backup to import…
+                    </button>
+                  </div>
+                  {importFilePath ? (
+                    <div className="settings-import-staging">
+                      <p className="settings-import-file">
+                        {importFilePath}
+                      </p>
+                      <p className="modal-lead settings-backup-lead">
+                        {importFileKind === "ambak"
+                          ? "Enter the recovery phrase for this backup. Use the same optional passphrase as when you exported, if any."
+                          : importFileKind === "zip"
+                            ? "Plain ZIP: recovery phrase is not required. Optional passphrase is ignored."
+                            : "This file does not look like a valid backup."}
+                      </p>
+                      {importFileKind === "ambak" ? (
+                        <label className="modal-field">
+                          Recovery phrase
+                          <textarea
+                            className="settings-mnemonic-input"
+                            value={importMnemonic}
+                            onChange={(e) => setImportMnemonic(e.target.value)}
+                            rows={3}
+                            placeholder="twelve or twenty-four words…"
+                            spellCheck={false}
+                            autoComplete="off"
+                          />
+                        </label>
+                      ) : null}
+                      <label className="modal-field">
+                        Optional passphrase (if the backup used one)
+                        <input
+                          type="password"
+                          value={importPassphrase}
+                          onChange={(e) => setImportPassphrase(e.target.value)}
+                          autoComplete="new-password"
+                          spellCheck={false}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={importFileKind === "unknown"}
+                        onClick={() => setImportConfirmOpen(true)}
+                      >
+                        Replace all data with this backup…
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
                 {import.meta.env.DEV ? (
                   <div className="modal-field dev-only-settings">
                     <h3 className="dev-settings-title">Development</h3>
@@ -235,6 +500,82 @@ function AppShellInner() {
             document.body,
           )
         : null}
+
+      {mnemonicReveal
+        ? createPortal(
+            <div
+              className="modal-backdrop settings-modal-backdrop"
+              role="presentation"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) {
+                  setMnemonicReveal(null);
+                }
+              }}
+            >
+              <div
+                className="modal"
+                role="dialog"
+                aria-labelledby="mnemonic-title"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="modal-head">
+                  <h2 id="mnemonic-title">Save your recovery phrase</h2>
+                  <button
+                    type="button"
+                    className="modal-close"
+                    onClick={() => setMnemonicReveal(null)}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="modal-lead">
+                  Store these words in a safe place. Anyone with this phrase
+                  (and your passphrase, if you set one) can decrypt the backup.
+                  The app cannot recover this phrase later.
+                </p>
+                <pre className="settings-mnemonic-reveal" translate="no">
+                  {mnemonicReveal}
+                </pre>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(mnemonicReveal);
+                        pushToast("Copied to clipboard.", "success");
+                      } catch (e) {
+                        pushToast(String(e), "error");
+                      }
+                    }}
+                  >
+                    Copy phrase
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => setMnemonicReveal(null)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {importConfirmOpen ? (
+        <ConfirmModal
+          title="Replace all data?"
+          message="This removes your current database and photos on this device and replaces them with the selected backup. This cannot be undone."
+          confirmLabel="Replace with backup"
+          onCancel={() => setImportConfirmOpen(false)}
+          onConfirm={() => {
+            void runImportBackup();
+          }}
+        />
+      ) : null}
 
       {import.meta.env.DEV ? (
         <SilhouetteSvgBrowserModal

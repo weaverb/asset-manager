@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod db;
 mod dev_seed;
@@ -10,6 +11,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let resolver = app.path();
             let base = resolver
@@ -27,6 +29,7 @@ pub fn run() {
             app.manage(AppPaths {
                 db_path,
                 images_dir,
+                backup_lock: std::sync::Mutex::new(()),
             });
             Ok(())
         })
@@ -58,6 +61,9 @@ pub fn run() {
             commands::add_asset_maintenance,
             commands::list_asset_maintenance,
             commands::get_dashboard_stats,
+            commands::export_backup,
+            commands::import_backup,
+            commands::inspect_backup_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

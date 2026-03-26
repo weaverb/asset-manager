@@ -181,3 +181,11 @@ export interface AssetMaintenance {
   notes: string | null;
   createdAt: string;
 }
+
+/** Result of `inspect_backup_file` IPC. */
+export type BackupFileKindDto = "zip" | "ambak" | "unknown";
+
+/** Result of `export_backup` IPC. */
+export type ExportBackupInvokeResult = {
+  mnemonic?: string;
+};
