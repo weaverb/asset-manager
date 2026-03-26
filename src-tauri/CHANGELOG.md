@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/weaverb/asset-manager/compare/v0.2.0...v0.2.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* **release:** sync npm/tauri versions to 0.2.0 and fix release-please paths ([999f232](https://github.com/weaverb/asset-manager/commit/999f232ba28fd1e94813a8ee64c7541229b445b7))
+
 ## [0.2.0](https://github.com/weaverb/asset-manager/compare/v0.1.0...v0.2.0) (2026-03-26)
 
 
