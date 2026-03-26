@@ -36,16 +36,16 @@ From the repository root (`asset-manager/`):
 3. **Run the app in development mode** (starts the Vite dev server and opens the native window):
 
    ```bash
-   npm run tauri dev
+   npm run tauri:dev
    ```
 
-   The UI is served at `http://localhost:1420` inside the desktop shell; hot reload applies to the frontend, and Rust changes trigger a rebuild as usual for Tauri.
+   This uses [`src-tauri/tauri.dev.conf.json`](src-tauri/tauri.dev.conf.json) so the dev app has bundle id **`com.weaverb.assetmanager.dev`** and does **not** share its SQLite database with a production install (**`com.weaverb.assetmanager`**). The UI is served at `http://localhost:1420` inside the desktop shell; hot reload applies to the frontend, and Rust changes trigger a rebuild as usual for Tauri.
 
 ### Commands reference
 
 | Command | Purpose |
 |---------|---------|
-| `npm run tauri dev` | **Main command for local testing:** run the full app with dev tooling. |
+| `npm run tauri:dev` | **Main command for local testing:** full app with dev tooling and a **separate** app data dir from production (see [Where data is stored](#where-data-is-stored)). |
 | `npm run dev` | Run only the Vite dev server (browser at `http://localhost:1420`). The Tauri APIs will not work in the browser; use this for quick UI-only checks. |
 | `npm run build` | Production build of the frontend to `dist/` (`tsc` + Vite). |
 | `npm run tauri build` | Build the installable app for your current platform (runs `npm run build` first per `tauri.conf.json`). |
@@ -65,9 +65,9 @@ The repository needs **Settings → Actions → General → Workflow permissions
 
 ### Development sample data (debug builds)
 
-On **`npm run tauri dev`** (debug builds only), the app may **seed the database once** with a richer sample set: **six** firearms (mixed calibers and maintenance settings), **six** ammunition rows (at least one per firearm caliber), two parts, and two accessories, plus a few **completed** range days for usage stats. Whether seeding has already run is stored in SQLite (`app_settings` key `dev_inventory_seeded`), so **later dev sessions do not insert duplicates**.
+On **`npm run tauri:dev`** (debug builds only), the app may **seed the database once** with a richer sample set: **six** firearms (mixed calibers and maintenance settings), **six** ammunition rows (at least one per firearm caliber), two parts, and two accessories, plus a few **completed** range days for usage stats. Whether seeding has already run is stored in SQLite (`app_settings` key `dev_inventory_seeded`), so **later dev sessions do not insert duplicates**.
 
-To wipe inventory and seed again, open **Settings** while running **`npm run tauri dev`**: under the **Development** section (shown only in Vite dev builds), use **Drop & reseed database**. That action is not available in release builds.
+To wipe inventory and seed again, open **Settings** while running **`npm run tauri:dev`**: under the **Development** section (shown only in Vite dev builds), use **Drop & reseed database**. That action is not available in release builds.
 
 ### Backend tests and coverage
 
@@ -94,11 +94,18 @@ This project uses **LLVM source-based coverage** via `cargo llvm-cov` rather tha
 
 **`TypeError: Cannot read properties of undefined (reading 'invoke')` (or the app shows “Run the desktop app”)**
 
-The frontend only has access to Rust commands when it runs **inside the Tauri window**. If you open `http://localhost:1420` in a normal browser, or use `npm run dev` without Tauri, IPC is not available. Use **`npm run tauri dev`** for full local testing.
+The frontend only has access to Rust commands when it runs **inside the Tauri window**. If you open `http://localhost:1420` in a normal browser, or use `npm run dev` without Tauri, IPC is not available. Use **`npm run tauri:dev`** for full local testing.
 
 ### Where data is stored
 
-The SQLite database and image files live under the OS app data directory (e.g. `~/Library/Application Support/com.assetmanager.app/` on macOS). Exact paths follow Tauri’s `app_data_dir` for your platform.
+The SQLite database and image files live under the OS app data directory. Exact paths follow Tauri’s `app_data_dir` for your platform:
+
+- **Production** installs (e.g. from a release `.dmg` / `.msi`): bundle id **`com.weaverb.assetmanager`** — on macOS, e.g. `~/Library/Application Support/com.weaverb.assetmanager/`.
+- **Local development** (`npm run tauri:dev`): bundle id **`com.weaverb.assetmanager.dev`** — e.g. `~/Library/Application Support/com.weaverb.assetmanager.dev/`, so your dev DB never collides with production.
+
+Identifiers intentionally **omit a `.app` suffix** so the app data directory name does not end in `.app` (macOS Finder otherwise treats the folder like a broken application bundle when opened from the GUI).
+
+Changing the production identifier does **not** migrate data from older folders (e.g. `com.assetmanager.app` or `com.weaverb.assetmanager.app`). Copy `asset_manager.db` and the `images/` folder manually if you need to move data.
 
 App preferences (including an optional external API key) are stored in the same SQLite database in an `app_settings` table.
 

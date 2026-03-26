@@ -331,7 +331,7 @@ pub fn suggest_tags(query: String, paths: State<AppPaths>) -> Result<FieldSugges
 
 pub(crate) fn exec_dev_drop_and_reseed(paths: &AppPaths) -> Result<(), String> {
     if !cfg!(debug_assertions) {
-        return Err("Dev-only: use a debug build (npm run tauri dev).".into());
+        return Err("Dev-only: use a debug build (npm run tauri:dev).".into());
     }
     let conn = db::open(&paths.db_path)?;
     crate::dev_seed::drop_and_reseed(&conn, &paths.images_dir)

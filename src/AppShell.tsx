@@ -198,7 +198,8 @@ function AppShellInner() {
                     <p className="modal-lead dev-settings-lead">
                       Removes every asset and image file, then inserts the same
                       dev seed used on first{" "}
-                      <code className="mono-inline">tauri dev</code> run (two
+                      <code className="mono-inline">npm run tauri:dev</code>{" "}
+                      run (two
                       rows per type). Release builds cannot run this.
                     </p>
                     <button

@@ -19,7 +19,7 @@ npm install
 
 | Command | Use |
 |--------|-----|
-| `npm run tauri dev` | **Primary:** full app with hot reload; Rust IPC available only here (not in a plain browser). |
+| `npm run tauri:dev` | **Primary:** full app with hot reload; uses `tauri.dev.conf.json` so app data is under **`com.weaverb.assetmanager.dev`**, not production. Rust IPC available only here (not in a plain browser). |
 | `npm run dev` | Vite only at `http://localhost:1420` — UI-only; Tauri `invoke` APIs unavailable. |
 | `npm run build` | Production frontend: `tsc` + Vite → `dist/`. |
 | `npm run tauri build` | Release bundle for current platform (runs `beforeBuildCommand` → `npm run build`). |
@@ -39,7 +39,8 @@ There is no ESLint config today; frontend quality is enforced by **TypeScript st
 
 - `src/` — React UI, routing, Tauri API usage (`src/tauri.ts`).
 - `src-tauri/` — Rust crate (`lib.rs`, commands, DB, GunSpec client).
-- `src-tauri/tauri.conf.json` — app metadata, bundle, `beforeDevCommand` / `beforeBuildCommand`.
+- `src-tauri/tauri.conf.json` — app metadata, bundle, `beforeDevCommand` / `beforeBuildCommand` (production bundle id **`com.weaverb.assetmanager`**).
+- `src-tauri/tauri.dev.conf.json` — merge config for **`npm run tauri:dev`** only; overrides identifier to **`com.weaverb.assetmanager.dev`** so dev and prod SQLite paths differ.
 
 End-user workflows (range days, ammunition checkout, toasts, form behavior) are summarized for humans in **`README.md` → “Using the application”.** When changing those flows, keep README and this section aligned.
 
@@ -118,7 +119,7 @@ Tauri’s release flow reads these consistently; drifting versions cause confusi
 
 ## Agent-specific notes
 
-- **IPC / `invoke`:** Full-stack testing needs `npm run tauri dev` (or a built app). Browser-only `npm run dev` will show “Run the desktop app” / undefined `invoke` — that is expected.
+- **IPC / `invoke`:** Full-stack testing needs `npm run tauri:dev` (or a built app). Browser-only `npm run dev` will show “Run the desktop app” / undefined `invoke` — that is expected.
 - **Secrets:** GunSpec API keys are stored via in-app Settings in SQLite, not repo files (see `README.md`).
 - **Coverage:** `test:rust:coverage` ignores `lib.rs` and `main.rs` in the threshold regex; extend tests rather than lowering the bar without team agreement.
 

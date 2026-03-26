@@ -11,6 +11,7 @@
     "build": "node scripts/check-node.mjs && tsc && vite build",
     "preview": "node scripts/check-node.mjs && vite preview",
     "tauri": "tauri",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:rust:coverage": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml test --lib --html --output-dir target/coverage-rust --fail-under-lines 80 --ignore-filename-regex 'lib[.]rs$|main[.]rs$'",
     "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
