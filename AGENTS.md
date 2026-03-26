@@ -29,7 +29,7 @@ npm install
 | `npm run fmt:rust:check` | Fail if Rust code is not formatted (CI / pre-merge). |
 | `npm run lint:rust` | `clippy` on all targets with `-D warnings`. |
 
-**CI:** GitHub Actions runs the build, Rust tests, `fmt:rust:check`, `lint:rust`, and `test:rust:coverage` on pull requests to `main` (see `.github/workflows/ci.yml`).
+**CI:** GitHub Actions runs the build, Rust tests, `fmt:rust:check`, `lint:rust`, and `test:rust:coverage` on pull requests to `main` (see `.github/workflows/ci.yml`). Ubuntu runners install **WebKit/GTK dev packages** (`libwebkit2gtk-4.1-dev`, etc.) so `cargo test` can compile the Tauri dependency graph on Linux—the same set as the release workflow’s Linux build.
 
 **Rust quality (recommended before merging backend-heavy changes):** run `npm run fmt:rust:check` and `npm run lint:rust` (or `npm run fmt:rust` to auto-fix formatting).
 
