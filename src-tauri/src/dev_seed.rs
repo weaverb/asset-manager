@@ -10,11 +10,9 @@ pub const DEV_SEED_FLAG_KEY: &str = "dev_inventory_seeded";
 const TAG_DEV: &str = "dev";
 const TAG_RANGE: &str = "range";
 
-/// If this is a debug build and the DB has not been marked seeded, insert sample rows.
+/// Seeds sample inventory once per dev database (see `lib.rs` setup).
+#[cfg(debug_assertions)]
 pub fn ensure_dev_seed(conn: &Connection, images_dir: &Path) -> Result<(), String> {
-    if !cfg!(debug_assertions) {
-        return Ok(());
-    }
     if db::get_setting(conn, DEV_SEED_FLAG_KEY)?.as_deref() == Some("1") {
         return Ok(());
     }
@@ -401,15 +399,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg(debug_assertions)]
     fn ensure_dev_seed_inserts_only_once() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("db.sqlite");
         let img = dir.path().join("images");
         db::init(&db_path, &img).unwrap();
         let conn = db::open(&db_path).unwrap();
-        if !cfg!(debug_assertions) {
-            return;
-        }
         ensure_dev_seed(&conn, &img).unwrap();
         let n1 = db::list_assets(&conn, None, &[]).unwrap().len();
         ensure_dev_seed(&conn, &img).unwrap();

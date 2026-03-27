@@ -113,5 +113,5 @@ jobs:
         with:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseDraft: false
-          uploadUpdaterJson: false
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
