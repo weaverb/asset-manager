@@ -478,13 +478,8 @@ pub fn export_backup(
     if encrypt {
         let wc = word_count as usize;
         let pass = passphrase.unwrap_or_default();
-        let mnemonic = crate::backup::export_encrypted(
-            &paths.db_path,
-            &paths.images_dir,
-            &dest,
-            wc,
-            &pass,
-        )?;
+        let mnemonic =
+            crate::backup::export_encrypted(&paths.db_path, &paths.images_dir, &dest, wc, &pass)?;
         Ok(ExportBackupResult {
             mnemonic: Some(mnemonic),
         })
@@ -506,18 +501,9 @@ pub fn import_backup(
         .lock()
         .map_err(|e| format!("Backup already in progress ({e})."))?;
     let src = PathBuf::from(path.trim());
-    let phrase = mnemonic
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let phrase = mnemonic.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let pass = passphrase.unwrap_or_default();
-    crate::backup::import_from_path(
-        &paths.db_path,
-        &paths.images_dir,
-        &src,
-        phrase,
-        &pass,
-    )
+    crate::backup::import_from_path(&paths.db_path, &paths.images_dir, &src, phrase, &pass)
 }
 
 #[derive(Debug, Serialize)]

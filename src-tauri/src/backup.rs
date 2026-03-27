@@ -83,8 +83,7 @@ fn add_images_tree(
     images_dir: &Path,
     options: SimpleFileOptions,
 ) -> Result<(), String> {
-    zip
-        .add_directory("images/", options)
+    zip.add_directory("images/", options)
         .map_err(|e| e.to_string())?;
     if !images_dir.exists() {
         return Ok(());
@@ -128,7 +127,8 @@ pub fn build_backup_zip(db_path: &Path, images_dir: &Path, zip_path: &Path) -> R
     let mut zip = ZipWriter::new(file);
     let opts = zip_options();
 
-    zip.start_file("asset_manager.db", opts).map_err(|e| e.to_string())?;
+    zip.start_file("asset_manager.db", opts)
+        .map_err(|e| e.to_string())?;
     let mut dbf = File::open(&snap).map_err(|e| e.to_string())?;
     std::io::copy(&mut dbf, &mut zip).map_err(|e| e.to_string())?;
     add_images_tree(&mut zip, images_dir, opts)?;
@@ -203,7 +203,11 @@ fn encrypt_zip_file(zip_path: &Path, ambak_path: &Path, key: &[u8; 32]) -> Resul
     }
 }
 
-fn decrypt_ambak_to_zip_path(ambak_path: &Path, zip_out: &Path, key: &[u8; 32]) -> Result<(), String> {
+fn decrypt_ambak_to_zip_path(
+    ambak_path: &Path,
+    zip_out: &Path,
+    key: &[u8; 32],
+) -> Result<(), String> {
     let mut f = File::open(ambak_path).map_err(|e| e.to_string())?;
     let mut magic = [0u8; 4];
     f.read_exact(&mut magic).map_err(|e| e.to_string())?;
@@ -384,8 +388,8 @@ pub fn export_encrypted(
     if word_count != 12 && word_count != 24 {
         return Err("wordCount must be 12 or 24.".into());
     }
-    let mnemonic = Mnemonic::generate_in(Language::English, word_count)
-        .map_err(|e| e.to_string())?;
+    let mnemonic =
+        Mnemonic::generate_in(Language::English, word_count).map_err(|e| e.to_string())?;
     let phrase = mnemonic.to_string();
     let key = aes_key_from_mnemonic(&mnemonic, passphrase);
 
@@ -513,10 +517,7 @@ mod tests {
     fn mnemonic_key_and_parse() {
         let m = Mnemonic::generate_in(Language::English, 12).unwrap();
         let k1 = aes_key_from_mnemonic(&m, "secret");
-        let k2 = aes_key_from_mnemonic(
-            &parse_mnemonic(&m.to_string()).unwrap(),
-            "secret",
-        );
+        let k2 = aes_key_from_mnemonic(&parse_mnemonic(&m.to_string()).unwrap(), "secret");
         assert_eq!(k1, k2);
         let k3 = aes_key_from_mnemonic(&m, "other");
         assert_ne!(k1, k3);
@@ -527,7 +528,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let short = dir.path().join("short");
         fs::write(&short, [1, 2]).unwrap();
-        assert_eq!(inspect_backup_file(&short).unwrap(), BackupFileKind::Unknown);
+        assert_eq!(
+            inspect_backup_file(&short).unwrap(),
+            BackupFileKind::Unknown
+        );
 
         let ambak = dir.path().join("x.ambak");
         fs::write(&ambak, b"AMBK\x01").unwrap();
