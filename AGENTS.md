@@ -19,7 +19,7 @@ npm install
 
 | Command | Use |
 |--------|-----|
-| `npm run tauri dev` | **Primary:** full app with hot reload; Rust IPC available only here (not in a plain browser). |
+| `npm run tauri:dev` | **Primary:** full app with hot reload; uses `tauri.dev.conf.json` so app data is under **`com.weaverb.assetmanager.dev`**, not production. Rust IPC available only here (not in a plain browser). |
 | `npm run dev` | Vite only at `http://localhost:1420` — UI-only; Tauri `invoke` APIs unavailable. |
 | `npm run build` | Production frontend: `tsc` + Vite → `dist/`. |
 | `npm run tauri build` | Release bundle for current platform (runs `beforeBuildCommand` → `npm run build`). |
@@ -39,7 +39,8 @@ There is no ESLint config today; frontend quality is enforced by **TypeScript st
 
 - `src/` — React UI, routing, Tauri API usage (`src/tauri.ts`).
 - `src-tauri/` — Rust crate (`lib.rs`, commands, DB, GunSpec client).
-- `src-tauri/tauri.conf.json` — app metadata, bundle, `beforeDevCommand` / `beforeBuildCommand`.
+- `src-tauri/tauri.conf.json` — app metadata, bundle, `beforeDevCommand` / `beforeBuildCommand` (production bundle id **`com.weaverb.assetmanager`**).
+- `src-tauri/tauri.dev.conf.json` — merge config for **`npm run tauri:dev`** only; overrides identifier to **`com.weaverb.assetmanager.dev`** so dev and prod SQLite paths differ.
 
 End-user workflows (range days, ammunition checkout, toasts, form behavior) are summarized for humans in **`README.md` → “Using the application”.** When changing those flows, keep README and this section aligned.
 
@@ -50,6 +51,7 @@ End-user workflows (range days, ammunition checkout, toasts, form behavior) are 
 - **Numeric form fields:** Use shared **`DigitsOnlyInput`** and **`parseNonNegInt`** (`src/lib/parseNumeric.ts`) for integers; **`DecimalTextInput`** + **`parseOptionalPrice`** / **`sanitizeDecimalInput`** for money-style decimals. Avoid `type="number"` on asset and range-day quantity-style fields (native controls fight controlled React state while typing).
 - **Range days + ammunition (backend):** SQLite table `range_day_firearm_ammo` links planned days to firearm + ammunition assets. IPC includes `set_range_day_firearm_ammunition`, and `complete_range_day` accepts **`ammo_consumption`** (pairs must match assigned links; sums per gun match rounds fired when ammo is assigned; stock checks; decrements ammo `quantity`). See `src-tauri/src/db.rs` for validation rules (single caliber per gun per day, unique ammo asset per day across guns, etc.).
 - **Range days (frontend):** `RangeDayDetailPage` — planned section labels **Apply Firearm(s)** from selection count; **Save and close** calls the same planned update then navigates to `/range-days`. GunSpec field notices under autocomplete stay inline (not toasts).
+- **Backups:** Settings **Backup** uses `@tauri-apps/plugin-dialog` (`save` / `open`) and IPC `export_backup`, `import_backup`, `inspect_backup_file`. Implementation lives in `src-tauri/src/backup.rs` (ZIP via `ZipWriter` to a temp file, SQLite hot snapshot via `rusqlite` **backup** feature, `AMBK` v1/v2 + BIP39 + AES-GCM). Export/import holds `AppPaths.backup_lock` so only one backup operation runs at a time. After a successful import, the UI should call `refreshList()` from `AssetsListContext`.
 
 ## Conventional Commits
 
@@ -118,7 +120,7 @@ Tauri’s release flow reads these consistently; drifting versions cause confusi
 
 ## Agent-specific notes
 
-- **IPC / `invoke`:** Full-stack testing needs `npm run tauri dev` (or a built app). Browser-only `npm run dev` will show “Run the desktop app” / undefined `invoke` — that is expected.
+- **IPC / `invoke`:** Full-stack testing needs `npm run tauri:dev` (or a built app). Browser-only `npm run dev` will show “Run the desktop app” / undefined `invoke` — that is expected.
 - **Secrets:** GunSpec API keys are stored via in-app Settings in SQLite, not repo files (see `README.md`).
 - **Coverage:** `test:rust:coverage` ignores `lib.rs` and `main.rs` in the threshold regex; extend tests rather than lowering the bar without team agreement.
 

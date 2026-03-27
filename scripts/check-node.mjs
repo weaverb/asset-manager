@@ -26,6 +26,6 @@ if (Number.isNaN(major) || major < 24) {
   console.error("  fnm use          # or: nvm use");
   console.error("  node -v          # should show v24.x");
   console.error("  npm install");
-  console.error("  npm run tauri dev\n");
+  console.error("  npm run tauri:dev\n");
   process.exit(1);
 }

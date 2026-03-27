@@ -1,4 +1,4 @@
-//! Debug-only inventory seeding for local development (`tauri dev`).
+//! Debug-only inventory seeding for local development (`npm run tauri:dev`).
 
 use crate::db::{self, AssetInput};
 use rusqlite::{params, Connection};

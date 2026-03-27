@@ -7,11 +7,13 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::State;
 
 pub struct AppPaths {
     pub db_path: PathBuf,
     pub images_dir: PathBuf,
+    pub backup_lock: Mutex<()>,
 }
 
 fn with_conn<R>(
@@ -331,7 +333,7 @@ pub fn suggest_tags(query: String, paths: State<AppPaths>) -> Result<FieldSugges
 
 pub(crate) fn exec_dev_drop_and_reseed(paths: &AppPaths) -> Result<(), String> {
     if !cfg!(debug_assertions) {
-        return Err("Dev-only: use a debug build (npm run tauri dev).".into());
+        return Err("Dev-only: use a debug build (npm run tauri:dev).".into());
     }
     let conn = db::open(&paths.db_path)?;
     crate::dev_seed::drop_and_reseed(&conn, &paths.images_dir)
@@ -453,6 +455,76 @@ pub fn get_dashboard_stats(paths: State<AppPaths>) -> Result<db::DashboardStats,
     with_conn(&paths, db::get_dashboard_stats)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportBackupResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mnemonic: Option<String>,
+}
+
+#[tauri::command]
+pub fn export_backup(
+    path: String,
+    encrypt: bool,
+    word_count: u32,
+    passphrase: Option<String>,
+    paths: State<AppPaths>,
+) -> Result<ExportBackupResult, String> {
+    let _guard = paths
+        .backup_lock
+        .lock()
+        .map_err(|e| format!("Backup already in progress ({e})."))?;
+    let dest = PathBuf::from(path.trim());
+    if encrypt {
+        let wc = word_count as usize;
+        let pass = passphrase.unwrap_or_default();
+        let mnemonic =
+            crate::backup::export_encrypted(&paths.db_path, &paths.images_dir, &dest, wc, &pass)?;
+        Ok(ExportBackupResult {
+            mnemonic: Some(mnemonic),
+        })
+    } else {
+        crate::backup::export_plain_zip(&paths.db_path, &paths.images_dir, &dest)?;
+        Ok(ExportBackupResult { mnemonic: None })
+    }
+}
+
+#[tauri::command]
+pub fn import_backup(
+    path: String,
+    mnemonic: Option<String>,
+    passphrase: Option<String>,
+    paths: State<AppPaths>,
+) -> Result<(), String> {
+    let _guard = paths
+        .backup_lock
+        .lock()
+        .map_err(|e| format!("Backup already in progress ({e})."))?;
+    let src = PathBuf::from(path.trim());
+    let phrase = mnemonic.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let pass = passphrase.unwrap_or_default();
+    crate::backup::import_from_path(&paths.db_path, &paths.images_dir, &src, phrase, &pass)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InspectBackupDto {
+    /// `"zip"`, `"ambak"`, or `"unknown"`.
+    pub kind: &'static str,
+}
+
+#[tauri::command]
+pub fn inspect_backup_file(path: String) -> Result<InspectBackupDto, String> {
+    let k = crate::backup::inspect_backup_file(Path::new(path.trim()))?;
+    Ok(InspectBackupDto {
+        kind: match k {
+            crate::backup::BackupFileKind::Zip => "zip",
+            crate::backup::BackupFileKind::Ambak => "ambak",
+            crate::backup::BackupFileKind::Unknown => "unknown",
+        },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -472,6 +544,7 @@ mod tests {
             AppPaths {
                 db_path,
                 images_dir,
+                backup_lock: Mutex::new(()),
             },
         )
     }

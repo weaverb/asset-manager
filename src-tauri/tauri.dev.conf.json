@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Asset Manager (Dev)",
+  "identifier": "com.weaverb.assetmanager.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "Asset Manager (Dev)",
+        "width": 1100,
+        "height": 720
+      }
+    ]
+  }
+}

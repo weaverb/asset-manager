@@ -19,7 +19,7 @@ function NotTauri() {
           backend and SQLite. Opening <code>http://localhost:1420</code> in
           Chrome or Safari will not work.
         </p>
-        <p className="mono-block">npm run tauri dev</p>
+        <p className="mono-block">npm run tauri:dev</p>
         <p className="muted">
           Use <code>npm run dev</code> only if you are developing UI without IPC
           (Rust commands will stay unavailable).
