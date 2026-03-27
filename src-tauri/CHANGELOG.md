@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/weaverb/asset-manager/compare/v0.3.0...v0.3.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* update release workflow to include updater JSON option ([31173d1](https://github.com/weaverb/asset-manager/commit/31173d1bc242688d4b5a44b40082da491e4f1422))
+* update release workflow to include updater JSON option ([a4b299d](https://github.com/weaverb/asset-manager/commit/a4b299daa19832607b51083aa83c3783401b5212))
+
 ## [0.3.0](https://github.com/weaverb/asset-manager/compare/v0.2.1...v0.3.0) (2026-03-27)
 
 
