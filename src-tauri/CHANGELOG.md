@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/weaverb/asset-manager/compare/v0.2.1...v0.3.0) (2026-03-27)
+
+
+### Features
+
+* **backend:** backup export/import with optional encryption ([84f7903](https://github.com/weaverb/asset-manager/commit/84f790372676684a53f9ffaf6a88c52ea41c7b3d))
+
+
+### Bug Fixes
+
+* update commands and configuration for Tauri development ([e4ebe99](https://github.com/weaverb/asset-manager/commit/e4ebe99d7cec5155a4118a8f225c4d1c9ed223b5))
+
 ## [0.2.1](https://github.com/weaverb/asset-manager/compare/v0.2.0...v0.2.1) (2026-03-26)
 
 
