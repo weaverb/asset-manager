@@ -62,6 +62,10 @@ The workflow imports the PFX into the runner’s user certificate store, reads t
 
 - Open **Properties → Digital Signatures** on the `.msi` / `.exe` and confirm the signature is present and valid.
 
+## Workflow notes
+
+GitHub Actions does **not** allow the `secrets` context in step `if` conditions (see [workflow syntax](https://docs.github.com/en/actions/learn-github-actions/expressions#about-expressions)). The release workflow runs optional signing steps only on the relevant OS matrix legs and **no-ops inside the script** when the corresponding secrets are unset, so forks and repos without secrets still build unsigned artifacts.
+
 ## Security notes
 
 - Never commit certificates, `.p12`, `.pfx`, or `.p8` files to the repository.
