@@ -78,6 +78,9 @@ jobs:
           - platform: ubuntu-22.04
             args: ""
             rust_target: ""
+          - platform: ubuntu-22.04-arm
+            args: ""
+            rust_target: ""
           - platform: windows-latest
             args: ""
             rust_target: ""
@@ -88,7 +91,7 @@ jobs:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-22.04' || matrix.platform == 'ubuntu-22.04-arm'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -107,9 +110,91 @@ jobs:
           rustflags: ""
           rust-src-dir: src-tauri
 
+      - name: Import Apple Developer certificate
+        if: matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node -e "require('fs').writeFileSync('certificate.p12', Buffer.from(process.env.APPLE_CERTIFICATE, 'base64'))"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          python3 <<'PY'
+          import os
+          import re
+          import subprocess
+
+          out = subprocess.check_output(
+              ["security", "find-identity", "-v", "-p", "codesigning", "build.keychain"],
+              text=True,
+          )
+          ident = None
+          for line in out.splitlines():
+              m = re.search(r'"([^"]*Developer ID Application[^"]*)"', line)
+              if m:
+                  ident = m.group(1)
+                  break
+          if not ident:
+              print(out)
+              raise SystemExit("No Developer ID Application identity found in build.keychain")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("APPLE_SIGNING_IDENTITY<<EOF\n")
+              f.write(ident + "\n")
+              f.write("EOF\n")
+          PY
+
+      - name: Write App Store Connect API key for notarization
+        if: matrix.platform == 'macos-latest' && secrets.APPLE_API_KEY_P8_BASE64 != ''
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          node -e "require('fs').writeFileSync('AuthKey.p8', Buffer.from(process.env.APPLE_API_KEY_P8_BASE64, 'base64'))"
+          echo "APPLE_API_KEY_PATH=$PWD/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Import Windows code signing certificate
+        if: matrix.platform == 'windows-latest' && secrets.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Path certificate -Force | Out-Null
+          Set-Content -Path certificate/tempCert.txt -Value $env:WINDOWS_CERTIFICATE
+          certutil -decode certificate/tempCert.txt certificate/certificate.pfx
+          Remove-Item certificate/tempCert.txt
+          $secure = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $imported = Import-PfxCertificate -FilePath certificate/certificate.pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secure
+          "WINDOWS_CERT_THUMBPRINT=$($imported.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Apply Windows code signing to Tauri bundle config
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_CERT_THUMBPRINT != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERT_THUMBPRINT: ${{ env.WINDOWS_CERT_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          node -e 'const fs=require("fs");const p="src-tauri/tauri.conf.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));j.bundle=j.bundle||{};const w=j.bundle.windows||{};j.bundle.windows=Object.assign({},w,{certificateThumbprint:process.env.WINDOWS_CERT_THUMBPRINT,digestAlgorithm:"sha256",timestampUrl:"http://timestamp.digicert.com"});fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");'
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
         with:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseDraft: false
