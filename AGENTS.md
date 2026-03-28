@@ -103,13 +103,17 @@ Tauri’s release flow reads these consistently; drifting versions cause confusi
 **Automated releases (GitHub Actions):**
 
 - **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests to `main`: `npm run build`, Rust tests, `fmt:rust:check`, `lint:rust`, and `test:rust:coverage` (Ubuntu runner).
-- **[`.github/workflows/release.yml`](.github/workflows/release.yml)** — on every push to `main`: runs the same checks, then [release-please](https://github.com/googleapis/release-please) (manifest in [`release-please-config.json`](release-please-config.json) / [`.release-please-manifest.json`](.release-please-manifest.json)) opens or updates a **release PR** from Conventional Commits. When that PR is merged, the next push creates a **GitHub Release** (`vX.Y.Z`) and builds **macOS** (Apple Silicon + Intel), **Linux** (x64 `.deb` / `.AppImage` per Tauri defaults), and **Windows** installers via [`tauri-apps/tauri-action`](https://github.com/tauri-apps/tauri-action), attaching artifacts to that release.
+- **[`.github/workflows/release.yml`](.github/workflows/release.yml)** — on every push to `main`: runs the same checks, then [release-please](https://github.com/googleapis/release-please) (manifest in [`release-please-config.json`](release-please-config.json) / [`.release-please-manifest.json`](.release-please-manifest.json)) opens or updates a **release PR** from Conventional Commits. When that PR is merged, the next push creates a **GitHub Release** (`vX.Y.Z`) and builds **macOS** (Apple Silicon + Intel), **Linux x64** and **Linux arm64** (each runner produces `.deb` / `.AppImage` per Tauri defaults), and **Windows** installers via [`tauri-apps/tauri-action`](https://github.com/tauri-apps/tauri-action), attaching artifacts to that release. The arm64 leg uses the `ubuntu-22.04-arm` hosted runner label (see [Tauri’s GitHub guide](https://v2.tauri.app/distribute/pipelines/github/) and GitHub’s runner docs for availability on private repos or org plans).
 
 **release-please paths:** the Rust component lives under `src-tauri/`, but `extra-files` entries must use a **leading `/`** on paths (e.g. `/package.json`, `/src-tauri/tauri.conf.json`) so release-please updates the **repo root** files. Without that, it looks for `src-tauri/package.json` and `src-tauri/src-tauri/tauri.conf.json`, skips the real files, and **Tauri bundle names** (which read `tauri.conf.json` → `version`) can stay on an old version while the Git tag is already `vX.Y.Z`. Likewise set **`changelog-path` to `/CHANGELOG.md`** (not `CHANGELOG.md`): a bare filename is resolved under the package directory, so the repo-root [`CHANGELOG.md`](CHANGELOG.md) would stay stale while only `src-tauri/CHANGELOG.md` was updated.
 
 **Maintainer flow:** merge feature work to `main` with Conventional Commits → merge the **release-please** release PR when you want to ship → installers appear on the GitHub Release for the new tag.
 
 **Repository settings:** under **Settings → Actions → General → Workflow permissions**, enable **Read and write** for the `GITHUB_TOKEN` so release-please and tauri-action can open PRs and upload release assets.
+
+**Release code signing (optional):** The `publish` job can **sign** macOS builds (Developer ID + optional App Store Connect API notarization) and **sign** Windows installers when the GitHub secrets documented in [`docs/release-signing.md`](docs/release-signing.md) are set. Steps are skipped when secrets are absent (unsigned artifacts). Do not commit certificates or keys; rotate secrets when certs are renewed.
+
+**Chained workflows and `GITHUB_TOKEN`:** `release-please` and `publish` run in the **same** workflow, so uploading installers does not depend on a separate workflow run. Pushes or tags created by `GITHUB_TOKEN` often **do not** trigger **other** workflows (GitHub recursion protections). If you add separate automation that must run after the release (announcements, registries, integration tests against the tag), plan either a **`workflow_run`** workflow keyed off this file’s success on `main`, a **fine-grained PAT** (e.g. `RELEASE_PAT`) with minimal scopes and documented rotation, or a **GitHub App**—and update this doc with the chosen approach.
 
 **Emergency manual release checklist** (if automation is bypassed):
 
@@ -127,3 +131,5 @@ Tauri’s release flow reads these consistently; drifting versions cause confusi
 When instructions here conflict with an explicit user message in chat, **follow the user**.
 
 When making changes assume the user wants all documentation to be updated to reflect the changes.
+
+Prefer to use the GH CLI instead of the API directly when interacting with the Github.
