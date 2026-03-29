@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# release-please-action@v4 still targets Node 20; run it on Node 24 until upstream ships node24.
+# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -103,10 +108,20 @@ jobs:
 
       - run: npm ci
 
+      # Omit `target` when unused so the composite action never receives an empty input
+      # (avoids odd rustup / log output on Linux and Windows hosts).
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        if: matrix.rust_target != ''
         with:
           toolchain: stable
           target: ${{ matrix.rust_target }}
+          rustflags: ""
+          rust-src-dir: src-tauri
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        if: matrix.rust_target == ''
+        with:
+          toolchain: stable
           rustflags: ""
           rust-src-dir: src-tauri
 
@@ -205,7 +220,10 @@ jobs:
           }
           node -e 'const fs=require("fs");const p="src-tauri/tauri.conf.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));j.bundle=j.bundle||{};const w=j.bundle.windows||{};j.bundle.windows=Object.assign({},w,{certificateThumbprint:process.env.WINDOWS_CERT_THUMBPRINT,digestAlgorithm:"sha256",timestampUrl:"http://timestamp.digicert.com"});fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");'
 
+      # Platform-scoped env: do not inject macOS signing variables on Linux/Windows so
+      # Node / Tauri never see optional vars as missing (avoids misleading "undefined" in logs).
       - uses: tauri-apps/tauri-action@v0
+        if: startsWith(matrix.platform, 'macos')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -217,6 +235,26 @@ jobs:
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+        with:
+          tagName: ${{ needs.release-please.outputs.tag_name }}
+          releaseDraft: false
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
+
+      - uses: tauri-apps/tauri-action@v0
+        if: startsWith(matrix.platform, 'ubuntu')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.release-please.outputs.tag_name }}
+          releaseDraft: false
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
+
+      - uses: tauri-apps/tauri-action@v0
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseDraft: false

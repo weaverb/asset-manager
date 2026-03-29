@@ -66,6 +66,8 @@ The workflow imports the PFX into the runner’s user certificate store, reads t
 
 GitHub Actions does **not** allow the `secrets` context in step `if` conditions (see [workflow syntax](https://docs.github.com/en/actions/learn-github-actions/expressions#about-expressions)). The release workflow runs optional signing steps only on the relevant OS matrix legs and **no-ops inside the script** when the corresponding secrets are unset, so forks and repos without secrets still build unsigned artifacts.
 
+**Logs and `undefined`:** Optional signing-related environment variables are only attached to the **macOS** `tauri-apps/tauri-action` step. Linux and Windows use a separate action step with `GITHUB_TOKEN` only, so Node-based tooling is less likely to print the JavaScript value `undefined` for Apple-only settings. The Rust toolchain step omits the `target` input when the matrix uses the host default (empty `rust_target`), which avoids passing an empty optional input into `actions-rust-lang/setup-rust-toolchain`. Any remaining `undefined` in deep dependency or `cargo`/`tauri` output is usually cosmetic; treat unexpected build failures as real issues, not log noise alone.
+
 ## Security notes
 
 - Never commit certificates, `.p12`, `.pfx`, or `.p8` files to the repository.
